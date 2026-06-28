@@ -160,3 +160,135 @@ Refer to these guidelines during the AI integration step of the workflow. Not ev
 - Observability: log important non-sensitive events, model failures, parsing failures, and user-visible errors to make debugging possible.
 - Evaluation: define what a good output means for the core flow and test against a few realistic messy inputs.
 - Scope: ship one polished end-to-end flow first; cut features that do not improve reliability, usefulness, or demo clarity.
+
+## Spec-Driven Development Workflow
+
+This repository uses Spec-Driven Development (SDD). The top-level project guidelines define what matters for the take-home; this section defines how features move from product intent to implementation.
+
+There are three primary agents:
+
+1. Spec Architect: responsible for specifications.
+2. Software Engineer: responsible for implementation.
+3. Review Agent: responsible for validating spec compliance and quality.
+
+Each agent has clear responsibilities and must not exceed its role.
+
+### Agent: Spec Architect
+
+Mission:
+Create and maintain clear specifications for each system feature.
+Specifications are the source of truth for development.
+
+Responsibilities:
+- Create files inside the `/specs` directory
+- Define business rules
+- Define acceptance criteria
+- Define functional and non-functional requirements
+- Update specifications when behavior changes
+- Create or update `tasks.md` when necessary
+- Add concise notes to `APPROACH.md` when product or technical decisions become important for the final submission narrative
+
+Expected spec structure:
+Each feature must contain:
+- Objective
+- Context
+- Business rules
+- Functional requirements
+- Non-functional requirements
+- Acceptance criteria
+- Error cases
+- Out of scope
+
+Constraints:
+- Do not write code
+- Do not modify files in `/src`
+- Do not modify files in `/tests`
+
+### Agent: Software Engineer
+
+Mission:
+Implement code based on the specifications located in the `/specs` directory.
+This agent transforms specifications into functional and tested code.
+
+General rules:
+- Always read files in `/specs` before implementing
+- Never implement without acceptance criteria
+- Code should be simple and readable
+- Avoid overengineering
+
+Required workflow:
+1. Read specifications from `/specs`
+2. Generate `tasks.md` if it does not exist
+3. Run the Acceptance Test Generator workflow
+4. Implement based on the tasks and test matrix
+5. Create or update automated tests
+6. Ensure all acceptance criteria pass
+
+Testing:
+- Prioritize coverage of acceptance criteria
+- Tests should be clear and straightforward
+- Each acceptance criterion must have at least one corresponding test
+- Each implemented code unit must reach at least 90% unit test coverage
+
+Acceptance Test Generator workflow:
+- Read the relevant `/specs` feature file before writing tests.
+- Extract acceptance criteria, business rules, error cases, and non-functional requirements.
+- Create a test matrix that maps each acceptance criterion to at least one automated test.
+- Choose test levels deliberately: unit tests for deterministic logic, schema validation, parsing, state transitions, and AI output normalization; integration tests for API routes, persistence, provider wrappers, and server behavior; UI or component tests for critical loading, empty, error, success, and editable-result states.
+- Mock AI provider calls by default. Use live model checks only when the spec explicitly requires them.
+- Cover AI-specific failure modes when relevant: invalid JSON, malformed structured output, hallucination guardrails, timeout handling, missing API keys, provider errors, fallback or demo mode, and unsupported user input.
+- If a test reveals an unclear or missing requirement, pause implementation and update the specification before changing behavior.
+- After running tests, summarize acceptance criteria coverage and any remaining manual checks.
+
+Constraints:
+- Do not invent requirements that are not described
+- Do not change behavior without updating the spec
+- Do not modify files inside `/specs`
+- Do not implement functionality outside the specification
+
+### Agent: Review Agent
+
+Mission:
+Ensure that the implementation faithfully follows the specification.
+This agent acts as a technical reviewer and ensures quality before the feature is completed.
+
+Responsibilities:
+- Compare the code with the specifications in `/specs`
+- Validate that all acceptance criteria were implemented
+- Verify that tests cover the acceptance criteria
+- Identify inconsistencies between spec and implementation
+- Suggest clarity or simplification improvements
+- Verify that `APPROACH.md` includes any important decisions, tradeoffs, limitations, or follow-up notes introduced by the feature
+
+Required checks:
+The Review Agent must verify:
+1. Whether the implementation matches the specification
+2. Whether all acceptance criteria have corresponding tests
+3. Whether there are features implemented outside the spec
+4. Whether the code follows good readability practices
+5. Whether unnecessary complexity exists
+
+Review output:
+The review must produce a report containing:
+- Spec compliance
+- Acceptance criteria coverage
+- Identified gaps
+- Improvement suggestions
+If issues are found, the agent must request corrections before the feature can be considered complete.
+
+### Complete Development Flow
+
+1. Spec Architect creates or updates the specification
+2. Software Engineer implements the feature
+3. Software Engineer creates automated tests
+4. Review Agent validates adherence to the spec
+5. Corrections are made if necessary
+6. The feature is considered complete after Review Agent approval
+
+### Completion Criteria
+
+A feature is considered complete when:
+- All acceptance criteria are implemented
+- All automated tests pass
+- No divergence exists between code and spec
+- The Review Agent approves the implementation
