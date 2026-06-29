@@ -45,7 +45,10 @@ This is a working document. Keep notes concise while the product is being define
 - Current product hypothesis: AI product research app that identifies products from images or text, finds current price context, and suggests similar alternatives with source-backed uncertainty.
 - Product hook refined: support both "I have an image of this product" and "I can describe a product idea; help me create/search for something similar."
 - Guardrail: generated product concepts are search references, not purchasable listings; the app should use them to find similar real products.
-- Architecture direction: keep product research behind a pluggable research client/server boundary, potentially MCP-style, so search APIs and retailer adapters can be decided during technical design.
+- Architecture direction: use production-shaped orchestration with a graph workflow and MCP-style multi-server tool boundary for vision and research capabilities.
+- Runtime architecture decision: execute research as queue-backed background jobs and use UI polling for status/progress so slow AI and source calls do not block web requests and workers can scale independently.
+- Resilience decision: keep retries, timeouts, circuit breakers, and provider error normalization in a separate tool execution policy layer around MCP calls.
 - Image handling decision: temporarily store uploaded images only to support vision extraction/retry, then delete after TTL; downstream agents should use the structured product reference as the durable artifact.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
+- Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.
