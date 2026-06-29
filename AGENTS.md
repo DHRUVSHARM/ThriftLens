@@ -97,6 +97,7 @@ AI session history is a required deliverable and will be packaged by `./submit.s
 - Propose a short plan before coding when scope, architecture, or AI behavior is not yet settled.
 - Push back on vague or overbroad ideas when a smaller, sharper product would be better.
 - Record important product and technical decisions in `APPROACH.md`.
+- Keep `APPROACH.md` notes concise; summarize or cut low-value notes without prompting the user for routine documentation edits.
 - If using AI providers in the app, document the model/provider choice and failure behavior.
 
 ## Submission Checklist
@@ -239,6 +240,12 @@ Acceptance Test Generator workflow:
 - Cover AI-specific failure modes when relevant: invalid JSON, malformed structured output, hallucination guardrails, timeout handling, missing API keys, provider errors, fallback or demo mode, and unsupported user input.
 - If a test reveals an unclear or missing requirement, pause implementation and update the specification before changing behavior.
 - After running tests, summarize acceptance criteria coverage and any remaining manual checks.
+
+Optional cleanup skill:
+- Use `skills/code-structure-cleanup/SKILL.md` only when the user explicitly asks for `code-structure-cleanup`.
+- Run it after the feature works and tests pass, not before.
+- Keep the cleanup scoped to duplicated mechanics or messy structure in the feature area.
+- Do not change user-facing behavior or expand product scope during cleanup.
 
 Constraints:
 - Do not invent requirements that are not described
