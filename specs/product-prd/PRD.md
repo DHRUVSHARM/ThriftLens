@@ -1,18 +1,18 @@
 # PRD: ThriftLens
 
-Status: Product-approved draft; ready for technical design
+Status: Product-approved draft; technical design decisions reflected
 
 ## 1. Summary
 
-Build an AI-assisted product research app for two related shopping moments: when a user already has a product image, and when a user only has a rough idea in words. The app should identify or visualize the product concept, help the user say "yes, similar to this," then research current pricing and comparable products.
+Build an AI-assisted product research app for two related shopping moments: when a user already has a product image, and when a user only has a rough idea in words. The app should identify or structure the product concept, help the user say "yes, similar to this," then research current pricing and comparable products.
 
 - Problem category: README option 2, a deployable AI mini-app for a small problem from the author's own life.
 - Target user: inspiration shoppers using text to describe a product vibe, and deal/comparison shoppers using an existing product image to find price context and alternatives.
 - Primary V1 job: support both "I have an image of a product" and "I have a product idea in words" as first-class starting points.
 - Product coverage: general product research; examples may focus on specific categories for validation, but the product should not rely on category-specific hardcoding.
 - Positioning: practical smart-shopping assistant with a source-backed research workbench underneath. The hook is fast value-aware shopping help; the UI should support analytical comparison.
-- Core workflow: upload image or enter text description -> identify or create a visual/searchable product reference -> extract product attributes -> research web/product sources -> return current price context and similar products.
-- AI role: vision-based extraction, text-to-product-reference interpretation, optional non-blocking image/reference generation, clarification when the description is insufficient, structured product normalization, web research synthesis, similarity/ranking, and recommendation explanation.
+- Core workflow: upload image or enter text description -> identify or create a searchable product reference -> extract product attributes -> research web/product sources -> return current price context and similar products.
+- AI role: vision-based extraction, text-to-product-reference interpretation, clarification when the description is insufficient, structured product normalization, web research synthesis, similarity/ranking, and recommendation explanation.
 - Desired user moment: user starts with either a product image or a fuzzy text idea and gets a usable product reference, latest price context, and comparable real-product suggestions without manually searching across multiple sites.
 
 ## 2. User and Problem
@@ -26,7 +26,7 @@ The first target users are:
 
 ### Current Pain
 
-Product research is fragmented. A user may have an image, screenshot, or vague description, but finding the actual product, current pricing, comparable alternatives, and price-range context requires manual searching across shopping pages, search engines, image search, marketplaces, and review pages. When the user only has words, there is an extra gap: they may need the app to bring the concept to life visually before they can confirm "yes, search for products like this."
+Product research is fragmented. A user may have an image, screenshot, or vague description, but finding the actual product, current pricing, comparable alternatives, and price-range context requires manual searching across shopping pages, search engines, image search, marketplaces, and review pages. When the user only has words, there is an extra gap: they need the app to turn the concept into a structured reference before searching for real similar products.
 
 ### Why Existing Solutions Fall Short
 
@@ -34,7 +34,7 @@ Normal search works best when the user already knows the product name or exact t
 
 ### Success Criteria
 
-The user should be able to provide an image or description and quickly receive a visual/searchable product reference plus a structured, source-aware product brief that identifies the best match and the best-value alternatives worth checking next.
+The user should be able to provide an image or description and quickly receive a searchable product reference plus a structured, source-aware product brief that identifies the best match and the best-value alternatives worth checking next.
 
 ## 3. Core Use Case
 
@@ -46,14 +46,14 @@ Primary inputs:
 - Product image upload for "I have this product/image" research
 - Text description for "I am thinking of a product like this" research
 
-Text-description input requires a concept-to-reference step: the app should turn the user's words into a structured product reference that the user can confirm or refine. If the description is too vague, the app should ask for targeted clarification. A generated visual reference may be included if feasible, but it is non-blocking and not required for research. This reference is not treated as a real purchasable product; it is a search anchor for finding similar real products.
+Text-description input requires a concept-to-reference step: the app should turn the user's words into a structured product reference that the user can confirm or refine. If the description is too vague, the app should ask for targeted clarification. This reference is not treated as a real purchasable product; it is a search anchor for finding similar real products.
 
 ### Output
 
 What concrete artifact does the app produce?
 
 The app produces a product research brief:
-- visual/search reference or input summary, clearly labeled as either user-provided or generated
+- search reference or input summary, clearly labeled as either user-provided or generated
 - likely product identity or category
 - extracted visual/text attributes
 - exact source-backed prices where available
@@ -65,7 +65,7 @@ The app produces a product research brief:
 ### Primary Flow
 
 1. User uploads a product image or enters a product description.
-2. If the input is text-only, the app converts the description into a structured product reference, asking targeted clarification questions only when needed. A generated visual reference may be shown if feasible.
+2. If the input is text-only, the app converts the description into a structured product reference, asking targeted clarification questions only when needed.
 3. App/AI extracts product category, visible/textual attributes, likely brand/model signals, and search terms.
 4. App uses a research client layer to query web/product sources for matching and similar products.
 5. App/AI reasons about likely matches, pricing context, and comparable alternatives.
@@ -77,7 +77,7 @@ The app produces a product research brief:
 
 ### Agent Goal
 
-The AI agent's fixed goal is to turn a product image or text description into a grounded, reviewable product research brief. For image input, it should identify and research the product. For text-only input, it should create a structured product reference and use it to research similar real products in the same flow, asking clarifying questions only when the input is too ambiguous to proceed. Generated visual references, if included, must be treated as search anchors, not as real product listings.
+The AI agent's fixed goal is to turn a product image or text description into a grounded, reviewable product research brief. For image input, it should identify and research the product. For text-only input, it should create a structured product reference and use it to research similar real products in the same flow, asking clarifying questions only when the input is too ambiguous to proceed. Generated visual references are out of scope for V1; if added later, they must be treated as search anchors, not as real product listings.
 
 ### Perception
 
@@ -108,7 +108,7 @@ What the AI is allowed to produce:
 
 - Product attribute extraction
 - Product concept interpretation from text
-- Optional visual/search reference generation for text-only concepts, after structured reference extraction
+- Search reference generation for text-only concepts, after structured reference extraction
 - Search queries or research strategy
 - Structured product research brief
 - Ranked similar products with explanations
@@ -154,7 +154,7 @@ The structured product reference is the durable artifact passed from the vision/
 - Product image upload as primary input.
 - Text product description as secondary input.
 - Text-only product ideas should not require a separate confirmation step before research unless the input is too ambiguous; the app should show the reference and results together, then support refinement and rerun.
-- Structured product reference creation from text is required; generated visual reference creation is optional and must not block the core research workflow.
+- Structured product reference creation from text is required; generated visual reference creation is out of scope for V1.
 - Targeted clarification questions are allowed when the text description lacks enough information to create a useful product reference.
 - Clear labeling that generated or synthesized product references are only references for finding similar real products.
 - AI extraction of product attributes and likely search terms.
@@ -191,7 +191,7 @@ Include realistic examples for development, validation, and walkthroughs. The pr
 
 - Upload a product photo/screenshot and find current price plus similar alternatives.
 - Enter a text description such as "minimal black desk lamp with wireless charging" and get comparable product suggestions.
-- Enter a fuzzy product idea, generate or use a visual/search reference, confirm "similar to this," then research visually similar real products.
+- Enter a fuzzy product idea, create a structured search reference, confirm "similar to this," then research similar real products.
 
 ## 6. Requirements
 
@@ -257,7 +257,7 @@ Results and review:
 
 Define expected behavior for:
 
-- Empty input: TBD
+- Empty input: show validation guidance before creating a research job or making model/provider calls.
 - Low-quality input: ask for a clearer image or more description.
 - Temporary image unavailable: if the raw image has expired or was deleted after TTL, preserve the structured product reference if available and ask the user to re-upload only if vision extraction must be rerun.
 - Product not found: show that no verified match was found, preserve extracted attributes, and suggest how the user can improve the query or image.
@@ -326,7 +326,11 @@ V1 should support copying or sharing the research brief and opening source/produ
 - [ ] The app is runnable from documented setup commands.
 - [ ] Core AI failure modes have tests or documented smoke checks.
 
-## 10. Open Questions
+## 10. Validation Examples
 
-- What representative product examples should we use for validation and walkthroughs?
-- Is actual text-to-image generation required for V1, or can V1 use a generated product concept/search reference without producing an image?
+Use these representative examples for fixtures, tests, and walkthroughs. They should validate general product behavior without hardcoding category-specific logic.
+
+- Text-description flow: "minimal black desk lamp with wireless charging"
+- Image-style flow: a clear product photo/screenshot fixture for a stainless steel insulated water bottle
+
+Generated reference images are out of scope for V1 and belong in the future roadmap.

@@ -1,6 +1,6 @@
 # Technical Design: ThriftLens
 
-Status: Draft for review
+Status: Approved architecture baseline; implementation specs created
 
 Source PRD: `specs/product-prd/PRD.md`
 
@@ -12,6 +12,37 @@ ThriftLens should be a deployable product research workbench that supports two f
 - Text input: user describes a product idea and gets a structured product reference, optional visual reference, and source-backed matches.
 
 The core technical bet is to make the structured product reference the durable internal artifact. Raw images are temporary inputs for the vision step; downstream agents should use structured data.
+
+## 1.1 Decision Audit
+
+Locked V1 decisions:
+
+- Product: ThriftLens, a source-backed AI product research workbench.
+- Frontend: Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui primitives, and `lucide-react`.
+- UI layout: desktop two-column workbench, mobile single-column stacked flow.
+- Input mode: one active primary mode per job, either `Image` or `Text`.
+- Gateway: FastAPI Job Gateway.
+- Task processing: Celery with Redis broker/cache.
+- Durable state: Postgres.
+- Temporary image storage: MinIO as S3-compatible object store, with image metadata in Postgres.
+- Worker orchestration: bounded LangGraph-style workflow.
+- MCP client: multi-server MCP client boundary for capability servers.
+- AI provider: Gemini for image extraction, text extraction, clarification, and bounded ranking explanations.
+- Research source: SerpAPI hosted MCP server with Google Shopping as the V1 engine.
+- Provider modes: `REAL_MODE`, `SAMPLE_MODE`, and `TEST_MODE`.
+- Security: prompt-injection defenses through untrusted input treatment, structured output validation, fixed workflow transitions, restricted tool calls, and source-grounded output.
+- Cleanup: run code-structure-cleanup after each working feature and passing relevant tests.
+
+V1 exclusions:
+
+- Generated reference images.
+- User accounts and saved history.
+- Long-term price tracking and alerts.
+- Browser extension/share-sheet workflow.
+- Full structured field editor for every product reference field.
+- Retailer-specific engines beyond the selected SerpAPI Google Shopping path unless added after the core flow works.
+
+No known architecture decisions remain open. Implementation should verify exact package names, setup commands, SDK usage, and deployment details against current official documentation before coding.
 
 ## 2. AI Workflow Boundary
 
@@ -36,9 +67,9 @@ Proposed high-level flow:
 
 ```txt
 UI workbench
-  -> API research job endpoint
+  -> FastAPI Job Gateway
   -> persistent job record
-  -> background task queue
+  -> Celery task queue, Redis broker
   -> workflow worker
   -> orchestration graph / workflow controller
      -> input normalizer
@@ -65,7 +96,8 @@ Recommended V1 implementation shape:
 - Keep source/tool contracts stable so individual servers or adapters can change without rewriting the product flow.
 - Keep raw image handling isolated from downstream agent logic.
 - Build the V1 architecture as production-shaped software even if the first source/server set is narrow.
-- Run research workflows as queue-backed background jobs so slow AI/tool calls do not block web requests.
+- Use a Job Gateway to control intake/load before work enters the queue.
+- Run research workflows as Celery-backed background jobs so slow AI/tool calls do not block web requests.
 - Use frontend polling against job status endpoints for progress, partial results, retry, and refresh recovery.
 
 ### Orchestration Model
@@ -87,16 +119,17 @@ The graph should support partial completion. For example, if research fails afte
 
 ### Workflow Execution Model
 
-V1 should use queue-backed async execution with polling from the UI.
+V1 should use a Job Gateway, Celery-backed async execution, and polling from the UI.
 
 Request flow:
 
-1. `POST /api/research-jobs` validates the request, stores the uploaded image when needed, creates a durable job record, enqueues a background task, and returns `jobId`.
-2. A worker process runs the LangGraph-style workflow, calls MCP servers through the multi-server client, and updates the job record after each major stage.
-3. `GET /api/research-jobs/:id` returns the current job status, progress stage, safe user-facing message, partial result, and final result when available.
-4. Optional retry actions reuse the durable `ProductReference` when available so the user does not need to start over after a research-source failure.
+1. `POST /api/research-jobs` enters the FastAPI Job Gateway.
+2. The gateway validates the request, applies intake controls, stores the uploaded image when needed, creates a durable job record, enqueues a Celery task, and returns `jobId`.
+3. A Celery worker process runs the LangGraph-style workflow, calls MCP servers through the multi-server client, and updates the job record after each major stage.
+4. `GET /api/research-jobs/:id` returns the current job status, progress stage, safe user-facing message, partial result, and final result when available.
+5. Optional retry actions reuse the durable `ProductReference` when available so the user does not need to start over after a research-source failure.
 
-This is a production architecture decision. Product research depends on slow and variable external systems: model calls, vision extraction, search APIs, retailer sources, retries, and partial failures. A task queue keeps web requests short, lets workers scale independently, supports retries and timeouts, and makes progress observable. Polling remains the simplest V1 browser mechanism for displaying that job state.
+This is a production architecture decision. Product research depends on slow and variable external systems: model calls, vision extraction, search APIs, retailer sources, retries, and partial failures. The Job Gateway prevents unbounded intake, Celery keeps web requests short and lets workers scale independently, and polling remains the simplest V1 browser mechanism for displaying job state.
 
 Proposed job statuses:
 
@@ -134,6 +167,8 @@ type ResearchJob = {
 Execution requirements:
 
 - Web API requests should not wait for the full research workflow to finish.
+- The Job Gateway should reject or defer new jobs when intake limits, queue depth limits, or dependency-health limits are exceeded.
+- Celery should own accepted task execution, coarse task timeout, worker concurrency, and whole-task retry for infrastructure-level failures.
 - Workers should enforce per-stage timeouts and bounded retries for retryable provider/source failures.
 - Job state should be durable enough to survive a browser refresh and return partial results.
 - The UI should poll at a bounded interval and stop when the job reaches a terminal status.
@@ -161,11 +196,46 @@ Research server/tools:
 - Output: `ResearchSourceResult[]`.
 - Responsibility: source access and normalization, not final ranking.
 
+V1 research source decision:
+
+- Use SerpAPI's hosted MCP server as the primary research MCP server.
+- Use SerpAPI Google Shopping as the primary V1 engine for source-backed product candidates and prices.
+- Treat SerpAPI as the search/source access layer; ThriftLens still owns normalization into `ResearchSourceResult` and `SourceProduct`.
+- Restrict V1 tool usage to an allowlisted engine and parameter set. Do not expose the full generic search surface directly to model output.
+- Cap SerpAPI calls per job, defaulting to a small number of searches for exact match and alternatives.
+- Add future engines such as eBay, Amazon, Walmart, or Google Lens only after V1 works and each engine has clear normalization rules.
+
+SerpAPI MCP auth:
+
+- Prefer bearer-token auth if supported by the hosted MCP endpoint and `MultiServerMCPClient`.
+- If path-based auth is required, build the secret URL only inside backend/worker configuration code.
+- Never expose the SerpAPI MCP URL to the frontend.
+- Never log the full path-auth URL because it contains the API key.
+- Keep `SERPAPI_API_KEY` in server-side environment variables and document only a placeholder in `.env.example`.
+- Treat the fully constructed SerpAPI MCP URL as secret runtime configuration.
+
 Ranking/explanation component:
 
 - Input: `ProductReference`, `SourceProduct[]`, preferences, and source completeness.
 - Output: `RankedProductResult[]`, grouped alternatives, confidence, and explanation.
 - Responsibility: deterministic baseline ranking plus constrained model-assisted explanation/reranking.
+
+### Provider Modes
+
+V1 should support three provider modes:
+
+- `REAL_MODE`: use Gemini, SerpAPI MCP, MinIO, Postgres, Redis, and Celery for the real workflow. Missing required provider keys or infrastructure should return explicit configuration/unavailable errors.
+- `SAMPLE_MODE`: use bundled deterministic fixtures for extraction and research. No live provider calls are made, and the UI must clearly label results as sample/static data.
+- `TEST_MODE`: use mocks/fixtures only. Automated tests should not call live AI or paid research providers by default.
+
+Rules:
+
+- Never silently return sample products as if they were live research.
+- If real mode is requested and keys are missing, fail clearly instead of falling back invisibly.
+- If sample mode is enabled, label every result and trust summary as sample/static.
+- Include sample fixtures for one image-style flow and one text-description flow.
+- Optional live-provider smoke tests must require an explicit flag such as `LIVE_PROVIDER_SMOKE=1`.
+- Provider mode should be server-side configuration and should not expose secrets to the browser.
 
 ## 4. Runtime Components
 
@@ -178,6 +248,65 @@ Responsibilities:
 - Show product reference, research progress, verified matches, possible matches, grouped alternatives, trust signals, and errors.
 - Let user edit/refine the reference or preferences and rerun research.
 - Support copy/share of the research brief and opening product/source links.
+
+V1 UI decision:
+
+- Use Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui primitives, and `lucide-react`.
+- Use a workbench layout: two columns on desktop, single-column stacked flow on mobile.
+- Use explicit `Image` and `Text` input modes, with one primary input mode per submitted job.
+- Avoid landing-page and chat-sidebar patterns; the first screen should be the working product surface.
+- Show sample/static labels in both status and trust summary when sample mode is active.
+
+### FastAPI Job Gateway
+
+Responsibilities:
+
+- Validate text/image input, preferences, file type, file size, and request shape before enqueueing work.
+- Apply intake controls: rate limits, maximum queued jobs, maximum active jobs, payload limits, and idempotency keys where practical.
+- Create durable `ResearchJob` records and return `jobId` quickly.
+- Reject overload clearly with a retryable user-safe message instead of accepting jobs that are unlikely to run.
+- Read job state for polling endpoints without exposing raw provider errors.
+- Keep user/model content separate from system instructions and server configuration.
+
+The gateway answers: "Should this job be accepted right now?"
+
+V1 gateway decision:
+
+- Use FastAPI for the Job Gateway.
+- Use Pydantic models for request validation, response contracts, and safe error shapes.
+- Use FastAPI file/form handling for image uploads and text/preferences submission.
+- Keep the gateway thin: it should validate, apply intake controls, create jobs, enqueue Celery tasks, and serve polling responses.
+- Do not run vision, research, ranking, or multi-step LangGraph workflows inside request handlers.
+- Use Docker Compose to make the multi-service setup runnable in a fresh Linux container.
+
+### Celery Task Processing Layer
+
+Responsibilities:
+
+- Use Redis as the broker for accepted research jobs.
+- Run one Celery task per V1 research job.
+- Enforce coarse task timeouts and worker concurrency.
+- Retry whole jobs only for infrastructure-level failures where rerunning the workflow is safe.
+- Leave product-level partial failure, source-level retries, and circuit breakers to the workflow graph and tool execution policy.
+
+The task layer answers: "When and how should accepted work run?"
+
+### Postgres Durable Store
+
+Responsibilities:
+
+- Store durable `ResearchJob` state, status, timestamps, retryability, and safe errors.
+- Store `ProductReference`, partial `ProductResearchBrief`, final `ProductResearchBrief`, and source-attempt metadata.
+- Support polling reads while workers update job state.
+- Support TTL cleanup for expired jobs and completed temporary workflow data.
+- Provide the source of truth for user-visible job status and results.
+
+V1 persistence decision:
+
+- Use Postgres for durable job/result persistence.
+- Use Redis only as the Celery broker/cache layer, not as the source of truth for product research results.
+- Use JSON/JSONB fields for structured AI/research artifacts where schema flexibility is useful.
+- Keep database access behind repository/service boundaries so storage details do not leak into the workflow graph or UI.
 
 ### Orchestration Graph / Workflow Controller
 
@@ -226,6 +355,8 @@ Workflow graph
 
 The workflow graph decides what the failure means for the product experience. The policy layer decides whether a tool call should be attempted, retried, skipped, or marked as unavailable.
 
+Celery-level retries should be reserved for whole-task infrastructure failures such as worker interruption before durable state is saved. Tool/provider failures inside a running job should usually be handled here so one source failure does not rerun the entire research workflow.
+
 ### Temporary Image Store
 
 Responsibilities:
@@ -235,7 +366,17 @@ Responsibilities:
 - Avoid logging raw image contents or long-lived public URLs.
 - Return a recoverable error if the image expires before vision extraction can rerun.
 
-V1 storage choice is still open: in-memory/temp filesystem vs object storage. The technical spec should pick the simplest reliable option for the chosen stack.
+V1 storage decision:
+
+- Use MinIO as the S3-compatible temporary object store.
+- Access MinIO through an object-storage abstraction instead of MinIO-specific calls spread through the app.
+- Store raw image bytes only in MinIO, not Postgres.
+- Store only image metadata in Postgres: object key, content type, size, checksum, created timestamp, and expiration timestamp.
+- Keep buckets private and use internal object keys for worker/vision-server access.
+- Delete the object after successful `ProductReference` extraction when raw-image retry is no longer needed, or after TTL expiry.
+- Use a default 2-hour TTL for uploaded images.
+- Treat MinIO as a production-feasible object store when deployed with proper persistent storage, backups, credentials, health checks, and cleanup.
+- Keep the abstraction compatible with other S3-compatible object stores if deployment needs change later.
 
 ### Product Reference Extractor Tool Boundary
 
@@ -255,7 +396,7 @@ Responsibilities:
 - Normalize results into a common `SourceProduct` shape.
 - Report per-source errors without failing the entire workflow when possible.
 
-V1 should keep this layer source-agnostic. The concrete source choice belongs in technical design review, but the integration should use the same MCP/HTTP tool boundary planned for production. The first source set can be narrow, but it should not be hidden behind throwaway local-only plumbing.
+V1 keeps this layer source-agnostic at the ThriftLens contract boundary while using SerpAPI's hosted MCP server with Google Shopping as the selected first source. Additional engines or retailer-specific sources can be added later behind the same normalization path.
 
 ### Ranking and Recommendation Engine
 
@@ -499,6 +640,29 @@ type ProductResearchBrief = {
 
 ## 6. AI Workflow
 
+### Model Provider Direction
+
+V1 should use Gemini as the single AI provider for model-assisted steps.
+
+Rationale:
+
+- Gemini has strong multimodal support for image understanding.
+- The SDK and LangChain/LangGraph integration fit the Python worker/server architecture.
+- Structured output support is useful for producing a validated `ProductReference`.
+- Using one provider reduces setup burden, key management, test mocks, circuit-breaker surfaces, and provider-specific failure modes.
+
+Implementation rules:
+
+- The image/vision server should use Gemini for image-to-`ProductReference` extraction.
+- The text extraction tool should use Gemini for text-to-`ProductReference` extraction and clarification.
+- The ranking explanation step may use Gemini only for bounded explanations, labels, and close-call reranking over provided `SourceProduct` candidates.
+- The vision server should return only the `ProductReference` contract or a structured extraction error.
+- Gemini output must still pass schema validation and repair before downstream research begins.
+- Product facts extracted from the image must be marked with evidence and confidence; uncertain guesses should be warnings or missing-info notes.
+- Prompt-injection instructions visible in images must be ignored as instructions and treated only as untrusted visual/text evidence.
+- Live Gemini calls should be optional in tests; default automated tests should mock model responses.
+- Generated reference images are out of scope for V1 and should be documented as V2/future work.
+
 ### Step 1: Perceive
 
 Image path:
@@ -556,6 +720,8 @@ Required failure modes:
 - No verified match: show product reference and possible matches/refinement guidance.
 - Invalid model output: repair once, then show recoverable error.
 - Temporary image expired: preserve product reference if available; otherwise request re-upload.
+- Missing required provider key in real mode: return explicit configuration/unavailable state.
+- Sample mode active: return deterministic sample/static results with clear labeling.
 
 ### Failure Semantics
 
@@ -693,14 +859,29 @@ Availability:
 Security/privacy:
 
 - Never log `.env` values, provider keys, raw image payloads, or private source responses.
+- Never log secret-bearing MCP URLs, including SerpAPI path-auth URLs.
 - Delete temporary images after TTL/workflow completion.
+- Keep MinIO buckets private and never expose object storage credentials to the browser.
 - Treat generated product references as non-purchasable search anchors.
+- Treat all user text and image content as untrusted data, never as instructions.
+- Never allow model output to introduce arbitrary tool calls, URLs to fetch, system prompts, or workflow transitions.
+- Validate all model-produced `ProductReference` objects before research begins.
+
+Prompt-injection defenses:
+
+- UI/Gateway: enforce input length, file type, file size, rate limits, and request schema.
+- Extraction boundary: instruct vision/text models to extract product evidence only and ignore embedded instructions in text or images.
+- Schema boundary: accept only validated `ProductReference` fields; reject arbitrary commands, URLs, scripts, hidden instructions, and model-proposed tool actions.
+- Workflow graph: keep transitions fixed and server-defined; model output cannot choose new tools or change the workflow.
+- Tool layer: restrict calls to configured MCP servers and schema-validated tool arguments; never expose secrets to model or tool inputs.
+- Ranking/output: rank and explain only provided `SourceProduct` candidates; do not let model output invent products, prices, retailers, or availability.
 
 ## 9. Testing Strategy
 
 Unit tests:
 
 - Product reference schema validation.
+- Prompt-injection strings/images converted into safe product evidence or rejected fields.
 - Model-output repair/failure handling.
 - Research result normalization.
 - Ranking group assignment.
@@ -711,41 +892,32 @@ Integration tests:
 
 - Image workflow with mocked vision response.
 - Text workflow with mocked extraction response.
+- Prompt-injection attempt does not alter workflow transitions or tool selection.
 - Research unavailable path.
 - Partial source failure path.
 - Missing API key/sample-mode path.
+- Real mode with missing provider key returns explicit configuration error.
 
 UI or smoke tests:
 
 - Empty state.
 - Loading/progress states.
 - Complete result state.
+- Sample/static result labeling.
 - No verified match state.
 - Possible matches only state.
 - Copy/share and source-link actions.
 
-## 10. Implementation Questions
+## 10. Proposed Build Phases
 
-These should be answered before the Software Engineer phase:
-
-1. What application stack should V1 use?
-2. What AI provider/model handles image-to-reference extraction?
-3. What AI provider/model handles text-to-reference extraction and ranking explanations?
-4. Does V1 include actual generated reference images, or only structured references?
-5. What concrete research client/server source should V1 use first?
-6. Where should temporary images live, and what TTL should be enforced?
-7. Which task queue/store should V1 use for background research jobs?
-8. What sample-mode data should be included for missing keys/unavailable providers?
-
-## 11. Proposed Build Phases
-
-1. Choose stack, providers, and research source.
-2. Implement schema/types and validation.
-3. Build mocked workflow end-to-end with sample data.
-4. Add image upload and temporary image handling.
-5. Add vision/text extraction adapters.
-6. Add research client adapter.
-7. Add ranking/recommendation.
-8. Build workbench UI states.
-9. Add tests for acceptance criteria.
-10. Run cleanup/review passes.
+1. Implement runtime infrastructure: Docker Compose, frontend, API, worker, Postgres, Redis, and MinIO.
+2. Implement shared schema/types, validation, and database migrations.
+3. Implement FastAPI job gateway with sample-mode job creation and polling.
+4. Implement Celery worker and bounded workflow using fixture-backed providers.
+5. Add image upload, MinIO storage, metadata persistence, and TTL cleanup.
+6. Add Gemini extraction/explanation integration behind provider services.
+7. Add SerpAPI hosted MCP research integration and source normalization.
+8. Add deterministic ranking, grouped alternatives, and research brief assembly.
+9. Build Next.js workbench UI states.
+10. Add tests for acceptance criteria.
+11. Run code-structure-cleanup and review passes after each working feature.

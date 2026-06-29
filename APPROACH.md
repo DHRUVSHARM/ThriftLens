@@ -4,7 +4,7 @@ This is a working document. Keep notes concise while the product is being define
 
 ## What We Built
 
-- TBD after problem selection and core workflow approval.
+- Planned build: ThriftLens, an AI-assisted product research workbench that turns an image or text description into a structured product reference, researches source-backed product matches, and presents price context plus alternatives.
 
 ## Why This Problem
 
@@ -20,7 +20,7 @@ This is a working document. Keep notes concise while the product is being define
 
 ## What We Intentionally Left Out
 
-- TBD per approved spec.
+- Generated reference images, accounts/saved history, price alerts, browser extension flows, checkout, long-term marketplace ingestion, and full structured editing for every product-reference field.
 - Default bias: cut features that do not improve usefulness, reliability, or demo clarity.
 
 ## What Breaks First Under Pressure
@@ -46,9 +46,17 @@ This is a working document. Keep notes concise while the product is being define
 - Product hook refined: support both "I have an image of this product" and "I can describe a product idea; help me create/search for something similar."
 - Guardrail: generated product concepts are search references, not purchasable listings; the app should use them to find similar real products.
 - Architecture direction: use production-shaped orchestration with a graph workflow and MCP-style multi-server tool boundary for vision and research capabilities.
-- Runtime architecture decision: execute research as queue-backed background jobs and use UI polling for status/progress so slow AI and source calls do not block web requests and workers can scale independently.
+- Runtime architecture decision: use a FastAPI Job Gateway for intake/load control, Celery with Redis for accepted background research jobs, and UI polling for status/progress.
+- Persistence decision: use Postgres as the durable source of truth for job state, product references, partial briefs, final briefs, and attempt metadata; Redis remains the Celery broker/cache.
 - Resilience decision: keep retries, timeouts, circuit breakers, and provider error normalization in a separate tool execution policy layer around MCP calls.
-- Image handling decision: temporarily store uploaded images only to support vision extraction/retry, then delete after TTL; downstream agents should use the structured product reference as the durable artifact.
+- Prompt-injection decision: treat text and image content as untrusted product evidence; enforce safety through extraction prompts, schema validation, fixed workflow transitions, and restricted MCP tools.
+- Gateway decision: use FastAPI for typed validation, upload handling, job creation, polling endpoints, and thin intake control; Docker Compose will absorb the multi-service setup cost.
+- AI provider direction: use Gemini as the single V1 model provider for image extraction, text extraction, and bounded ranking explanations; defer generated reference images to V2.
+- Research source decision: use SerpAPI's hosted MCP server with Google Shopping as the primary V1 source; normalize results into ThriftLens contracts and treat path-auth MCP URLs as secrets.
+- Image handling decision: use MinIO as the V1 S3-compatible temporary object store; store image metadata in Postgres, delete raw images after extraction or TTL, and keep `ProductReference` as the durable artifact.
+- Fallback decision: support real, sample, and test provider modes; sample mode must use deterministic fixtures and visibly label results as sample/static instead of pretending they are live research.
+- UI decision: use a Next.js workbench, not a landing page or chat sidebar; desktop uses two columns for input/reference and results, while mobile stacks the same flow.
+- Implementation planning decision: split the approved technical design into focused implementation specs and require `code-structure-cleanup` after each working feature so service boundaries stay maintainable.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
 - Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.

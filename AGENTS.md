@@ -224,6 +224,7 @@ Required workflow:
 4. Implement based on the tasks and test matrix
 5. Create or update automated tests
 6. Ensure all acceptance criteria pass
+7. Run the `skills/code-structure-cleanup/SKILL.md` workflow after the feature works and tests pass
 
 Testing:
 - Prioritize coverage of acceptance criteria
@@ -241,11 +242,12 @@ Acceptance Test Generator workflow:
 - If a test reveals an unclear or missing requirement, pause implementation and update the specification before changing behavior.
 - After running tests, summarize acceptance criteria coverage and any remaining manual checks.
 
-Optional cleanup skill:
-- Use `skills/code-structure-cleanup/SKILL.md` only when the user explicitly asks for `code-structure-cleanup`.
-- Run it after the feature works and tests pass, not before.
-- Keep the cleanup scoped to duplicated mechanics or messy structure in the feature area.
+Required cleanup skill:
+- Run `skills/code-structure-cleanup/SKILL.md` after each feature works and tests pass.
+- Keep the cleanup scoped to duplicated mechanics, messy structure, or boundary violations in the feature area.
+- Preserve ThriftLens boundaries between gateway, worker, workflow graph, provider clients, tool execution policy, repositories, object storage, ranking, and UI.
 - Do not change user-facing behavior or expand product scope during cleanup.
+- If cleanup reveals missing or unclear requirements, pause and update the relevant spec before changing behavior.
 
 Constraints:
 - Do not invent requirements that are not described
@@ -299,3 +301,10 @@ A feature is considered complete when:
 - All automated tests pass
 - No divergence exists between code and spec
 - The Review Agent approves the implementation
+
+
+## Documentation Policy
+
+When using a framework, SDK, deployment platform, or external API, prefer current official documentation over memory. Before making major implementation decisions, verify setup commands, package names, API usage, environment variable names, and deployment steps against official docs when web search is available.
+
+Use official docs first, then package READMEs or source repos, then community posts only if official docs are insufficient. Summarize the relevant documentation finding before editing code.
