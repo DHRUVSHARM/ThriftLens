@@ -1,6 +1,6 @@
 # Backend Gateway Spec
 
-Status: Draft for implementation review
+Status: Implemented and reviewed
 
 Sources:
 - `specs/product-prd/PRD.md`
@@ -46,6 +46,7 @@ The gateway is the only browser-facing backend surface for research jobs. It sho
   - store raw bytes in MinIO
   - store metadata in Postgres
   - attach image reference to the job
+- MinIO image upload and `uploaded_images` metadata persistence belong to this backend gateway slice, not the runtime infrastructure slice.
 - Create durable `ResearchJob` records with initial status `queued`.
 - Enqueue a Celery task for accepted jobs.
 - Return only `jobId`, status, progress message, safe errors, partial brief, and final brief.

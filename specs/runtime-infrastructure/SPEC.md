@@ -37,6 +37,8 @@ ThriftLens uses asynchronous product research jobs. The web gateway must stay re
   - `PROVIDER_MODE`
   - `NEXT_PUBLIC_API_BASE_URL`
   - `DATABASE_URL`
+  - `DB_POOL_SIZE`
+  - `DB_MAX_OVERFLOW`
   - `REDIS_URL`
   - `GEMINI_API_KEY`
   - `SERPAPI_API_KEY`

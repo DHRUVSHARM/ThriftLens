@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.db import run_schema_migrations
 from app.health import collect_runtime_health
+from app.routes import router
 
 
 @asynccontextmanager
@@ -13,6 +14,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="ThriftLens API", lifespan=lifespan)
+app.include_router(router)
 
 
 @app.get("/api/health")

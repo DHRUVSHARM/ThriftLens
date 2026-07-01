@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS research_jobs (
     status TEXT NOT NULL,
     provider_mode TEXT NOT NULL,
     input_type TEXT NOT NULL,
+    request_payload JSONB NOT NULL DEFAULT '{}'::JSONB,
     progress_message TEXT NOT NULL DEFAULT '',
     product_reference JSONB,
     partial_brief JSONB,
@@ -15,6 +16,8 @@ CREATE TABLE IF NOT EXISTS research_jobs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL
 );
+
+ALTER TABLE research_jobs ADD COLUMN IF NOT EXISTS request_payload JSONB NOT NULL DEFAULT '{}'::JSONB;
 
 CREATE TABLE IF NOT EXISTS uploaded_images (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

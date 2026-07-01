@@ -59,6 +59,8 @@ This is a working document. Keep notes concise while the product is being define
 - Implementation planning decision: split the approved technical design into focused implementation specs and require `code-structure-cleanup` after each working feature so service boundaries stay maintainable.
 - First implementation slice: scaffolded Docker Compose runtime with frontend, FastAPI API, Celery worker, Postgres, Redis, and MinIO; default provider mode is sample mode so local setup does not require paid keys.
 - Runtime infrastructure review: API and worker now share one dependency health collector; Compose validation, static runtime tests, and container-internal API/worker health checks passed.
+- Backend gateway slice: added `/api/research-jobs`, polling, retry, text/image validation, MinIO image upload, Postgres metadata persistence, Celery enqueueing, and sample/static completion labeling without live provider calls.
+- Database reliability adjustment: kept SQLAlchemy async connection pooling enabled for production via configurable pool settings; tests use async ASGI clients and worker tasks use a persistent async loop to avoid cross-event-loop asyncpg reuse.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
 - Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.

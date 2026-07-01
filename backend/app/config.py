@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     provider_mode: ProviderMode = "SAMPLE_MODE"
     database_url: str = "postgresql+asyncpg://thriftlens:thriftlens@postgres:5432/thriftlens"
+    db_pool_size: int = Field(default=5, ge=1)
+    db_max_overflow: int = Field(default=10, ge=0)
     redis_url: str = "redis://redis:6379/0"
 
     gemini_api_key: str = ""

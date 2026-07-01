@@ -1,11 +1,20 @@
 from pathlib import Path
-from unittest import TestCase
+from unittest import SkipTest, TestCase
 
 
-ROOT = Path(__file__).resolve().parents[2]
+def find_repo_root() -> Path | None:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "docker-compose.yml").exists():
+            return parent
+    return None
+
+
+ROOT = find_repo_root()
 
 
 def read(path: str) -> str:
+    if ROOT is None:
+        raise SkipTest("Repository root is not mounted in this test environment.")
     return (ROOT / path).read_text(encoding="utf-8")
 
 
@@ -16,6 +25,8 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "PROVIDER_MODE",
             "NEXT_PUBLIC_API_BASE_URL",
             "DATABASE_URL",
+            "DB_POOL_SIZE",
+            "DB_MAX_OVERFLOW",
             "REDIS_URL",
             "GEMINI_API_KEY",
             "SERPAPI_API_KEY",

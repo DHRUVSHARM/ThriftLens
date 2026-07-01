@@ -76,9 +76,10 @@ Status: Active
 - [x] Runtime infrastructure: Compose, API shell, worker shell, Postgres, Redis, MinIO, frontend shell.
 - [x] Shared backend schemas, settings, database migrations, and health checks.
 - [x] Runtime infrastructure Review Agent pass.
-- [ ] Backend gateway job creation/polling in sample mode.
+- [x] Backend gateway job creation/polling in sample mode.
+- [x] MinIO image upload and metadata persistence.
+- [x] Backend gateway Review Agent pass.
 - [ ] Celery worker sample-mode workflow.
-- [ ] MinIO image upload and metadata persistence.
 - [ ] Gemini provider integration.
 - [ ] SerpAPI hosted MCP integration.
 - [ ] Ranking/research brief assembly.
@@ -96,3 +97,10 @@ Status: Active
 - Worker runtime health task passed inside the worker container with Postgres, Redis, MinIO, Gemini config, and SerpAPI config checks true.
 - User-facing `curl http://localhost:8000/api/health` was confirmed from the user's terminal before the final health extraction; sandboxed localhost curl was not reachable after restart, so container-internal health verification was used.
 - Ran code-structure-cleanup for the runtime slice; extracted repeated health checks into `app.health` and repeated backend service environment config into a Compose YAML anchor.
+- Backend gateway Python files passed `python3 -m py_compile`.
+- Backend gateway uses production-style SQLAlchemy async pooling with explicit `DB_POOL_SIZE` and `DB_MAX_OVERFLOW` settings.
+- Gateway endpoint tests use `httpx.AsyncClient`/`ASGITransport` plus test-only engine disposal between pytest event loops, rather than disabling pooling in app code.
+- Celery worker async DB calls use a persistent worker-process event loop via `app.async_runtime` so pooled asyncpg connections are not reused across fresh `asyncio.run` loops.
+- Backend gateway tests passed in the API container with `docker compose exec api python -m pytest tests/test_backend_gateway.py`.
+- Full API-container backend test command passed with `8 passed, 5 skipped`; skipped tests are repo-root static checks that run from the host with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`.
+- Gateway cleanup extracted repeated queue-failure behavior into `enqueue_or_mark_failed`.
