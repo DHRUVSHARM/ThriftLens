@@ -57,6 +57,8 @@ This is a working document. Keep notes concise while the product is being define
 - Fallback decision: support real, sample, and test provider modes; sample mode must use deterministic fixtures and visibly label results as sample/static instead of pretending they are live research.
 - UI decision: use a Next.js workbench, not a landing page or chat sidebar; desktop uses two columns for input/reference and results, while mobile stacks the same flow.
 - Implementation planning decision: split the approved technical design into focused implementation specs and require `code-structure-cleanup` after each working feature so service boundaries stay maintainable.
+- First implementation slice: scaffolded Docker Compose runtime with frontend, FastAPI API, Celery worker, Postgres, Redis, and MinIO; default provider mode is sample mode so local setup does not require paid keys.
+- Runtime infrastructure review: API and worker now share one dependency health collector; Compose validation, static runtime tests, and container-internal API/worker health checks passed.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
 - Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.

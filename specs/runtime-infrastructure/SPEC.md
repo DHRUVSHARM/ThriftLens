@@ -1,6 +1,6 @@
 # Runtime Infrastructure Spec
 
-Status: Draft for implementation review
+Status: Implemented and reviewed
 
 Sources:
 - `specs/product-prd/PRD.md`

@@ -1,5 +1,33 @@
 # Luma Take-Home
 
+## ThriftLens Runtime Setup
+
+ThriftLens is being built as a Docker Compose app with:
+
+- `frontend`: Next.js product workbench
+- `api`: FastAPI Job Gateway
+- `worker`: Celery worker
+- `postgres`: durable job/result state
+- `redis`: Celery broker/cache
+- `minio`: temporary uploaded image object storage
+
+Run locally:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Default mode is `SAMPLE_MODE`, so the runtime can start without live Gemini or SerpAPI keys. For real provider calls, set `PROVIDER_MODE=REAL_MODE` and fill `GEMINI_API_KEY` and `SERPAPI_API_KEY`.
+
+Useful URLs:
+
+- Frontend: http://localhost:3000
+- API health: http://localhost:8000/api/health
+- MinIO console: http://localhost:9001
+
+Do not commit real secrets in `.env`.
+
 Modern engineering is about directing leverage — tools, judgment, taste — toward real outcomes. This take-home is designed around that.
 
 Pick a problem. Build something that works. You have ~1 working day.

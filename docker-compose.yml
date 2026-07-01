@@ -1,0 +1,120 @@
+x-backend-env: &backend-env
+  PROVIDER_MODE: ${PROVIDER_MODE:-SAMPLE_MODE}
+  DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://thriftlens:thriftlens@postgres:5432/thriftlens}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
+  SERPAPI_MCP_BASE_URL: ${SERPAPI_MCP_BASE_URL:-https://mcp.serpapi.com}
+  MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+  MINIO_BUCKET: ${MINIO_BUCKET:-thriftlens-uploads}
+  OBJECT_STORAGE_FORCE_PATH_STYLE: ${OBJECT_STORAGE_FORCE_PATH_STYLE:-true}
+  MAX_QUEUED_JOBS: ${MAX_QUEUED_JOBS:-50}
+  MAX_ACTIVE_JOBS: ${MAX_ACTIVE_JOBS:-10}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
+  MAX_TEXT_LENGTH: ${MAX_TEXT_LENGTH:-2000}
+  LIVE_PROVIDER_SMOKE: ${LIVE_PROVIDER_SMOKE:-false}
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+
+  api:
+    build:
+      context: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      <<: *backend-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./backend
+    command: celery -A app.worker.celery_app worker --loglevel=INFO
+    environment:
+      <<: *backend-env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-thriftlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-thriftlens}
+      POSTGRES_DB: ${POSTGRES_DB:-thriftlens}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-thriftlens-uploads}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}; do sleep 1; done &&
+      mc mb --ignore-existing local/$${MINIO_BUCKET}
+      "
+
+volumes:
+  postgres_data:
+  minio_data:
