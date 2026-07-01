@@ -61,6 +61,7 @@ This is a working document. Keep notes concise while the product is being define
 - Runtime infrastructure review: API and worker now share one dependency health collector; Compose validation, static runtime tests, and container-internal API/worker health checks passed.
 - Backend gateway slice: added `/api/research-jobs`, polling, retry, text/image validation, MinIO image upload, Postgres metadata persistence, Celery enqueueing, and sample/static completion labeling without live provider calls.
 - Database reliability adjustment: kept SQLAlchemy async connection pooling enabled for production via configurable pool settings; tests use async ASGI clients and worker tasks use a persistent async loop to avoid cross-event-loop asyncpg reuse.
+- Worker orchestration slice: replaced the sample completion shortcut with a bounded workflow that extracts/validates `ProductReference`, records attempts, handles partial research failure, applies deterministic ranking, and builds `ProductResearchBrief`.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
 - Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.

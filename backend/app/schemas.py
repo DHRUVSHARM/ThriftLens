@@ -4,7 +4,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 InputType = Literal["image", "text"]
-JobStatus = Literal["queued", "running", "completed", "failed", "expired"]
+JobStatus = Literal[
+    "queued",
+    "extracting_reference",
+    "needs_refinement",
+    "researching_sources",
+    "ranking_results",
+    "complete",
+    "partial",
+    "failed",
+    "expired",
+]
 
 
 class ResearchPreferences(BaseModel):

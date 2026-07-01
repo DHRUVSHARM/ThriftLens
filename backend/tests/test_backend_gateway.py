@@ -66,14 +66,14 @@ async def test_sample_mode_job_eventually_gets_static_final_brief(client: AsyncC
     final_body = None
     for _ in range(20):
         poll_body = (await client.get(f"/api/research-jobs/{job_id}")).json()
-        if poll_body["status"] == "completed":
+        if poll_body["status"] == "complete":
             final_body = poll_body
             break
         await anyio_sleep(0.25)
 
     assert final_body is not None
     assert final_body["finalBrief"]["label"] == "Sample/static result"
-    assert final_body["finalBrief"]["sourceNote"] == "No live provider was called in SAMPLE_MODE."
+    assert final_body["finalBrief"]["freshnessNote"] == "All source data is deterministic sample/static data."
 
 
 @pytest.mark.anyio

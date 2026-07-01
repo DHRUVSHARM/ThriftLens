@@ -22,6 +22,7 @@ def _job_from_row(row: Any) -> dict[str, Any]:
         "status": mapping["status"],
         "provider_mode": mapping["provider_mode"],
         "input_type": mapping["input_type"],
+        "request_payload": _decode_json(mapping["request_payload"]),
         "progress_message": mapping["progress_message"],
         "product_reference": _decode_json(mapping["product_reference"]),
         "partial_brief": _decode_json(mapping["partial_brief"]),
@@ -144,6 +145,240 @@ async def get_research_job(job_id: str) -> dict[str, Any] | None:
         return _job_from_row(row)
 
 
+async def get_uploaded_images(job_id: str) -> list[dict[str, Any]]:
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text(
+                """
+                SELECT object_key, content_type, size_bytes, checksum, expires_at
+                FROM uploaded_images
+                WHERE job_id = :job_id
+                ORDER BY created_at ASC
+                """
+            ),
+            {"job_id": job_id},
+        )
+        return [
+            {
+                "object_key": row._mapping["object_key"],
+                "content_type": row._mapping["content_type"],
+                "size_bytes": row._mapping["size_bytes"],
+                "checksum": row._mapping["checksum"],
+                "expires_at": row._mapping["expires_at"],
+            }
+            for row in result
+        ]
+
+
+async def record_job_attempt(
+    *,
+    job_id: str,
+    stage: str,
+    dependency: str,
+    attempt: int,
+    error_code: str | None = None,
+    retryable: bool = False,
+) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO job_attempts (
+                    job_id,
+                    stage,
+                    dependency,
+                    attempt,
+                    error_code,
+                    retryable,
+                    finished_at
+                )
+                VALUES (
+                    :job_id,
+                    :stage,
+                    :dependency,
+                    :attempt,
+                    :error_code,
+                    :retryable,
+                    NOW()
+                )
+                """
+            ),
+            {
+                "job_id": job_id,
+                "stage": stage,
+                "dependency": dependency,
+                "attempt": attempt,
+                "error_code": error_code,
+                "retryable": retryable,
+            },
+        )
+
+
+async def count_job_attempts(job_id: str) -> int:
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("SELECT COUNT(*) FROM job_attempts WHERE job_id = :job_id"),
+            {"job_id": job_id},
+        )
+        return int(result.scalar_one())
+
+
+async def update_dependency_health(
+    *,
+    dependency: str,
+    state: str,
+    failure: bool = False,
+) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO dependency_health (
+                    dependency,
+                    state,
+                    recent_failure_count,
+                    recent_success_count,
+                    updated_at
+                )
+                VALUES (
+                    :dependency,
+                    :state,
+                    :failure_count,
+                    :success_count,
+                    NOW()
+                )
+                ON CONFLICT (dependency) DO UPDATE
+                SET
+                    state = EXCLUDED.state,
+                    recent_failure_count = dependency_health.recent_failure_count + EXCLUDED.recent_failure_count,
+                    recent_success_count = dependency_health.recent_success_count + EXCLUDED.recent_success_count,
+                    updated_at = NOW()
+                """
+            ),
+            {
+                "dependency": dependency,
+                "state": state,
+                "failure_count": 1 if failure else 0,
+                "success_count": 0 if failure else 1,
+            },
+        )
+
+
+async def update_job_stage(job_id: str, *, status: str, progress_message: str) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE research_jobs
+                SET
+                    status = :status,
+                    progress_message = :progress_message,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                """
+            ),
+            {
+                "job_id": job_id,
+                "status": status,
+                "progress_message": progress_message,
+            },
+        )
+
+
+async def store_product_reference(
+    job_id: str,
+    *,
+    product_reference: dict[str, Any],
+    progress_message: str,
+) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE research_jobs
+                SET
+                    product_reference = CAST(:product_reference AS JSONB),
+                    progress_message = :progress_message,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                """
+            ),
+            {
+                "job_id": job_id,
+                "product_reference": json.dumps(product_reference),
+                "progress_message": progress_message,
+            },
+        )
+
+
+async def store_partial_brief(
+    job_id: str,
+    *,
+    partial_brief: dict[str, Any],
+    status: str,
+    progress_message: str,
+    retryable: bool,
+) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE research_jobs
+                SET
+                    status = :status,
+                    partial_brief = CAST(:partial_brief AS JSONB),
+                    retryable = :retryable,
+                    progress_message = :progress_message,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                """
+            ),
+            {
+                "job_id": job_id,
+                "partial_brief": json.dumps(partial_brief),
+                "status": status,
+                "retryable": retryable,
+                "progress_message": progress_message,
+            },
+        )
+
+
+async def store_final_brief(
+    job_id: str,
+    *,
+    final_brief: dict[str, Any],
+    status: str,
+    progress_message: str,
+) -> dict[str, Any] | None:
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text(
+                """
+                UPDATE research_jobs
+                SET
+                    status = :status,
+                    progress_message = :progress_message,
+                    final_brief = CAST(:final_brief AS JSONB),
+                    retryable = FALSE,
+                    safe_error = NULL,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                RETURNING *
+                """
+            ),
+            {
+                "job_id": job_id,
+                "final_brief": json.dumps(final_brief),
+                "status": status,
+                "progress_message": progress_message,
+            },
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        return _job_from_row(row)
+
+
 async def mark_job_failed(job_id: str, *, code: str, message: str, retryable: bool) -> None:
     safe_error = {"code": code, "message": message, "retryable": retryable}
     async with engine.begin() as connection:
@@ -188,34 +423,3 @@ async def mark_job_queued_for_retry(job_id: str) -> dict[str, Any]:
             {"job_id": job_id},
         )
         return _job_from_row(result.one())
-
-
-async def mark_sample_job_completed(job_id: str) -> dict[str, Any] | None:
-    final_brief = {
-        "mode": "sample",
-        "label": "Sample/static result",
-        "summary": "This placeholder confirms the gateway, queue, and worker path. Live product research is implemented in the provider slices.",
-        "matches": [],
-        "sourceNote": "No live provider was called in SAMPLE_MODE.",
-    }
-    async with engine.begin() as connection:
-        result = await connection.execute(
-            text(
-                """
-                UPDATE research_jobs
-                SET
-                    status = 'completed',
-                    progress_message = 'Sample research complete.',
-                    final_brief = CAST(:final_brief AS JSONB),
-                    retryable = FALSE,
-                    updated_at = NOW()
-                WHERE id = :job_id AND provider_mode = 'SAMPLE_MODE'
-                RETURNING *
-                """
-            ),
-            {"job_id": job_id, "final_brief": json.dumps(final_brief)},
-        )
-        row = result.one_or_none()
-        if row is None:
-            return None
-        return _job_from_row(row)

@@ -79,10 +79,11 @@ Status: Active
 - [x] Backend gateway job creation/polling in sample mode.
 - [x] MinIO image upload and metadata persistence.
 - [x] Backend gateway Review Agent pass.
-- [ ] Celery worker sample-mode workflow.
+- [x] Celery worker sample-mode workflow.
+- [x] Deterministic ranking/research brief assembly.
+- [x] Worker orchestration Review Agent pass.
 - [ ] Gemini provider integration.
 - [ ] SerpAPI hosted MCP integration.
-- [ ] Ranking/research brief assembly.
 - [ ] Next.js workbench UI.
 - [ ] Full acceptance tests and smoke checks.
 - [ ] Code-structure-cleanup after each working feature.
@@ -104,3 +105,8 @@ Status: Active
 - Backend gateway tests passed in the API container with `docker compose exec api python -m pytest tests/test_backend_gateway.py`.
 - Full API-container backend test command passed with `8 passed, 5 skipped`; skipped tests are repo-root static checks that run from the host with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`.
 - Gateway cleanup extracted repeated queue-failure behavior into `enqueue_or_mark_failed`.
+- Worker orchestration Python files passed `python3 -m py_compile`.
+- Worker orchestration tests passed in the API container with `docker compose exec api python -m pytest tests/test_worker_orchestration.py`.
+- Gateway plus worker suites passed together with `docker compose exec api python -m pytest tests/test_backend_gateway.py tests/test_worker_orchestration.py`.
+- Full API-container backend test command passed after worker orchestration with `16 passed, 5 skipped`.
+- Worker cleanup removed the obsolete repository-level sample completion shortcut so Celery tasks run through `ResearchWorkflow`.

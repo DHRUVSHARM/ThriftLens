@@ -3,7 +3,7 @@ from celery import Celery
 from app.async_runtime import run_async
 from app.config import get_settings
 from app.health import collect_runtime_health
-from app.job_repository import mark_sample_job_completed
+from app.workflow import run_research_workflow
 
 settings = get_settings()
 
@@ -27,7 +27,5 @@ def healthcheck() -> dict:
 
 @celery_app.task(name="process_research_job")
 def process_research_job(job_id: str) -> dict:
-    completed_job = run_async(mark_sample_job_completed(job_id))
-    if completed_job is None:
-        return {"jobId": job_id, "status": "queued"}
-    return {"jobId": job_id, "status": completed_job["status"]}
+    result = run_async(run_research_workflow(job_id))
+    return result.model_dump(by_alias=True)
