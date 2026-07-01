@@ -85,9 +85,10 @@ Status: Active
 - [x] Gemini provider integration.
 - [x] SerpAPI hosted MCP integration.
 - [x] Provider integrations Review Agent pass.
-- [ ] Next.js workbench UI.
-- [ ] Full acceptance tests and smoke checks.
-- [ ] Code-structure-cleanup after each working feature.
+- [x] Next.js workbench UI.
+- [x] Frontend workbench Review Agent pass.
+- [x] Full acceptance tests and smoke checks.
+- [x] Code-structure-cleanup after each completed feature so far.
 
 ## Verification Notes
 
@@ -118,3 +119,22 @@ Status: Active
 - Rebuilt API and worker Docker images after adding provider SDK dependencies, then recreated containers with `docker compose up -d --force-recreate api worker`.
 - Full API-container backend test command passed after provider integrations with `30 passed, 5 skipped`.
 - Provider cleanup kept provider details behind `GeminiExtractionProvider`, `SerpApiMCPResearchProvider`, `ToolExecutionPolicy`, and workflow factory boundaries; tests now use monkeypatch instead of persistent settings mutation.
+- Frontend workbench implemented image/text modes, preferences, job submission, polling, progress stages, product reference summary, grouped result sections, sample labels, retry, and copy/share summary.
+- Frontend cleanup extracted API calls into `frontend/lib/api.ts`, shared app-facing contracts into `frontend/lib/types.ts`, and presentation helpers into `frontend/lib/presentation.ts`.
+- Added browser-driven Playwright coverage using a separate `frontend-e2e` Docker image/service with mocked API responses for text completion, image validation/submission, partial research-unavailable state, no-verified-match possible results, copy/share, and mobile overflow.
+- Frontend image rebuilt with `docker compose build frontend`.
+- Frontend e2e image built with `docker compose build frontend-e2e`.
+- Production frontend build passed with `docker compose run --rm frontend npm run build`.
+- Browser-driven frontend tests passed with `docker compose run --rm frontend-e2e`.
+- Frontend service was recreated with `docker compose up -d --force-recreate frontend`; served page was smoke-checked through `curl http://localhost:3000`.
+- Gateway/worker contract tests passed after restarting the worker with `docker compose exec api python -m pytest tests/test_backend_gateway.py tests/test_worker_orchestration.py`.
+- Full API-container backend test command passed after frontend workbench with `30 passed, 5 skipped`.
+- Final acceptance Compose validation passed with `docker compose config --quiet`.
+- Final acceptance `docker compose ps` showed frontend, api, worker, postgres, redis, and minio running; Postgres and Redis were healthy.
+- Final host smoke check passed for `curl http://localhost:8000/api/health`; API returned `status: ok`, `providerMode: SAMPLE_MODE`, and Postgres/Redis/MinIO/Gemini/SerpAPI configuration checks true.
+- Final host smoke check passed for `curl -I http://localhost:3000`; frontend returned HTTP 200.
+- Final backend suite passed in the API container with `docker compose exec api python -m pytest tests`: `30 passed, 5 skipped`.
+- Final host static runtime tests passed with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`: `5 tests OK`.
+- Final frontend production build passed with `docker compose run --rm frontend npm run build`.
+- Final browser-driven frontend tests passed with `docker compose run --rm frontend-e2e`: `5 passed`.
+- Final whitespace check passed with `git diff --check`.

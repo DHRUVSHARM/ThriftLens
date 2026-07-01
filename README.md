@@ -26,6 +26,23 @@ Useful URLs:
 - API health: http://localhost:8000/api/health
 - MinIO console: http://localhost:9001
 
+Useful local checks:
+
+```bash
+docker compose config --quiet
+docker compose exec api python -m pytest tests
+python3 -m unittest backend.tests.test_runtime_infrastructure_static
+docker compose run --rm frontend npm run build
+docker compose run --rm frontend-e2e
+```
+
+Key environment variables are documented in `.env.example`. The most important knobs are:
+
+- `PROVIDER_MODE`: `SAMPLE_MODE`, `TEST_MODE`, or `REAL_MODE`
+- `GEMINI_API_KEY` and `SERPAPI_API_KEY`: required only for live provider calls
+- `DATABASE_URL`, `REDIS_URL`, and MinIO settings: runtime infrastructure
+- `LIVE_PROVIDER_SMOKE`: opt-in live provider smoke tests
+
 Do not commit real secrets in `.env`.
 
 Modern engineering is about directing leverage — tools, judgment, taste — toward real outcomes. This take-home is designed around that.

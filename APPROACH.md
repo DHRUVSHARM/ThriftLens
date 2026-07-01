@@ -63,6 +63,9 @@ This is a working document. Keep notes concise while the product is being define
 - Database reliability adjustment: kept SQLAlchemy async connection pooling enabled for production via configurable pool settings; tests use async ASGI clients and worker tasks use a persistent async loop to avoid cross-event-loop asyncpg reuse.
 - Worker orchestration slice: replaced the sample completion shortcut with a bounded workflow that extracts/validates `ProductReference`, records attempts, handles partial research failure, applies deterministic ranking, and builds `ProductResearchBrief`.
 - Provider integration slice: added Gemini and SerpAPI hosted MCP behind isolated provider clients, with schema validation, one repair pass, timeout/retry policy, allowlisted Google Shopping params, source-backed price normalization, and deterministic sample/test modes for reliable local review.
+- Frontend workbench slice: replaced the placeholder with the actual product surface: image/text intake, preferences, polling, reference review, grouped source-backed product cards, sample/static labels, retry, and copy/share.
+- Frontend quality slice: added Playwright browser tests in a separate Docker image so core UI flows are tested without adding browser dependencies to the app container.
+- Final acceptance slice: verified Docker Compose config, running services, API health, frontend HTTP 200, backend tests, host static runtime tests, frontend production build, Playwright e2e, and whitespace hygiene.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
 - Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.

@@ -34,6 +34,15 @@ services:
       api:
         condition: service_started
 
+  frontend-e2e:
+    profiles:
+      - test
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.e2e
+    environment:
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+
   api:
     build:
       context: ./backend

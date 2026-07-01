@@ -1,6 +1,6 @@
 # Frontend Workbench Spec
 
-Status: Draft for implementation review
+Status: Implemented and reviewed
 
 Sources:
 - `specs/product-prd/PRD.md`
@@ -9,6 +9,8 @@ Sources:
 - Tailwind CSS Next.js install docs: https://tailwindcss.com/docs/installation/framework-guides/nextjs
 - shadcn/ui Next.js install docs: https://ui.shadcn.com/docs/installation/next
 - lucide-react docs: https://lucide.dev/guide/react
+- Playwright installation docs: https://playwright.dev/docs/intro
+- Playwright Docker docs: https://playwright.dev/docs/docker
 
 ## Objective
 
@@ -24,6 +26,7 @@ The first screen should be the actual product. The UI should feel like a practic
 - Tailwind CSS has an official Next.js setup path and fits the need for responsive, utility-first workbench styling.
 - shadcn/ui has a documented Next.js installation path and gives accessible primitives for controls, tabs, dialogs, badges, buttons, and forms without forcing a heavy visual theme.
 - `lucide-react` provides React icons and should be used for compact commands and small UI affordances.
+- Playwright Test provides browser-driven UI tests with route-level API mocking; the official Docker image includes browsers/system dependencies, while the project must install the matching `@playwright/test` package separately.
 
 ## UI Stack Decision
 
@@ -33,6 +36,8 @@ The first screen should be the actual product. The UI should feel like a practic
 - Use `lucide-react` for icons.
 - Keep the frontend as a separate Docker Compose service that talks to the FastAPI gateway.
 - Keep API calls behind a small frontend API client module; React components should not embed endpoint details throughout the tree.
+- Implementation note: V1 uses accessible native controls styled with Tailwind rather than adding shadcn/ui dependencies during the build. The component shapes remain compatible with a future shadcn extraction if the design system is expanded.
+- Add a separate `frontend-e2e` Docker Compose test service using the official Playwright image so browser tests do not require browsers inside the Alpine app image.
 
 ## Business Rules
 
