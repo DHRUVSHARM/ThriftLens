@@ -172,4 +172,6 @@ class ResearchWorkflow:
 
 
 async def run_research_workflow(job_id: str) -> WorkflowResult:
-    return await ResearchWorkflow().run(job_id)
+    from app.provider_factory import build_research_workflow
+
+    return await build_research_workflow().run(job_id)

@@ -82,8 +82,9 @@ Status: Active
 - [x] Celery worker sample-mode workflow.
 - [x] Deterministic ranking/research brief assembly.
 - [x] Worker orchestration Review Agent pass.
-- [ ] Gemini provider integration.
-- [ ] SerpAPI hosted MCP integration.
+- [x] Gemini provider integration.
+- [x] SerpAPI hosted MCP integration.
+- [x] Provider integrations Review Agent pass.
 - [ ] Next.js workbench UI.
 - [ ] Full acceptance tests and smoke checks.
 - [ ] Code-structure-cleanup after each working feature.
@@ -110,3 +111,10 @@ Status: Active
 - Gateway plus worker suites passed together with `docker compose exec api python -m pytest tests/test_backend_gateway.py tests/test_worker_orchestration.py`.
 - Full API-container backend test command passed after worker orchestration with `16 passed, 5 skipped`.
 - Worker cleanup removed the obsolete repository-level sample completion shortcut so Celery tasks run through `ResearchWorkflow`.
+- Provider integration docs were checked against official/current sources: Gemini SDK and structured output docs, SerpAPI hosted MCP docs, and LangChain MCP adapter docs.
+- Provider integration Python files passed `python3 -m py_compile`.
+- Provider integration tests passed in the rebuilt API container with `docker compose exec api python -m pytest tests/test_provider_integrations.py`; the suite now includes a mocked `MultiServerMCPClient` contract test for LangChain tool invocation.
+- Tool execution policy tests passed with `docker compose exec api python -m pytest tests/test_tool_policy.py`, covering healthy success, retryable errors, non-retryable errors, timeouts, degraded health updates, and safe generic error normalization.
+- Rebuilt API and worker Docker images after adding provider SDK dependencies, then recreated containers with `docker compose up -d --force-recreate api worker`.
+- Full API-container backend test command passed after provider integrations with `30 passed, 5 skipped`.
+- Provider cleanup kept provider details behind `GeminiExtractionProvider`, `SerpApiMCPResearchProvider`, `ToolExecutionPolicy`, and workflow factory boundaries; tests now use monkeypatch instead of persistent settings mutation.

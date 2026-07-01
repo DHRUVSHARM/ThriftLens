@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
 
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash"
     serpapi_api_key: str = ""
     serpapi_mcp_base_url: str = "https://mcp.serpapi.com"
+    serpapi_max_calls_per_job: int = Field(default=2, ge=1)
+    provider_timeout_seconds: float = Field(default=20.0, gt=0)
+    provider_max_retries: int = Field(default=1, ge=0)
 
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = "minioadmin"

@@ -39,3 +39,14 @@ def upload_research_image(*, job_id: str, content: bytes, content_type: str) -> 
         size_bytes=len(content),
         content_type=content_type,
     )
+
+
+def download_research_image(object_key: str) -> bytes:
+    settings = get_settings()
+    client = create_minio_client()
+    response = client.get_object(settings.minio_bucket, object_key)
+    try:
+        return response.read()
+    finally:
+        response.close()
+        response.release_conn()
