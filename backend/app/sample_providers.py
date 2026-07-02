@@ -4,6 +4,27 @@ from app.workflow_contracts import ProductReference, SourceProduct, WorkflowProv
 
 
 class SampleExtractionProvider:
+    async def gate_image(self, *, request_payload: dict[str, Any], image_metadata: list[dict[str, Any]]) -> dict[str, Any]:
+        target = request_payload.get("targetDescription")
+        return {
+            "safetyStatus": "safe",
+            "productSuitability": "single_product",
+            "productLikenessConfidence": 0.9,
+            "detectedProducts": [
+                {
+                    "label": target or "stainless steel insulated water bottle",
+                    "locationHint": "center of image",
+                    "confidence": 0.9,
+                }
+            ],
+            "needsClarification": False,
+            "clarificationPrompt": None,
+            "injectionRisk": "low",
+            "instructionLikeText": [],
+            "decision": "proceed",
+            "reason": "Sample image gate treats fixture image as a clear product.",
+        }
+
     async def extract(self, *, input_type: str, request_payload: dict[str, Any], image_metadata: list[dict[str, Any]]) -> dict[str, Any]:
         if input_type == "image":
             return {

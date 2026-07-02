@@ -52,6 +52,9 @@ export type ProductResearchBrief = {
   freshnessNote: string;
   uncertaintyNotes: string[];
   rankedProducts: RankedProduct[];
+  rankingExplanation?: {
+    summary?: string;
+  } | null;
   userActions: string[];
   statusReason?: string | null;
 };

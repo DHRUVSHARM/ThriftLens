@@ -3,6 +3,31 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class DetectedProduct(BaseModel):
+    label: str
+    location_hint: str | None = Field(default=None, alias="locationHint")
+    confidence: float = Field(ge=0, le=1)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ImageGateResult(BaseModel):
+    safety_status: Literal["safe", "unsafe"] = Field(alias="safetyStatus")
+    product_suitability: Literal["single_product", "multiple_products", "non_product", "unclear"] = Field(
+        alias="productSuitability"
+    )
+    product_likeness_confidence: float = Field(alias="productLikenessConfidence", ge=0, le=1)
+    detected_products: list[DetectedProduct] = Field(default_factory=list, alias="detectedProducts")
+    needs_clarification: bool = Field(default=False, alias="needsClarification")
+    clarification_prompt: str | None = Field(default=None, alias="clarificationPrompt")
+    injection_risk: Literal["low", "medium", "high"] = Field(default="low", alias="injectionRisk")
+    instruction_like_text: list[str] = Field(default_factory=list, alias="instructionLikeText")
+    decision: Literal["proceed", "needs_refinement", "fail_safe"]
+    reason: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class ProductReference(BaseModel):
     product_type: str = Field(alias="productType", min_length=1)
     title: str = Field(min_length=1)
@@ -48,6 +73,7 @@ class ProductResearchBrief(BaseModel):
     freshness_note: str = Field(alias="freshnessNote")
     uncertainty_notes: list[str] = Field(default_factory=list, alias="uncertaintyNotes")
     ranked_products: list[RankedProduct] = Field(default_factory=list, alias="rankedProducts")
+    ranking_explanation: dict[str, str] | None = Field(default=None, alias="rankingExplanation")
     user_actions: list[str] = Field(default_factory=list, alias="userActions")
     status_reason: str | None = Field(default=None, alias="statusReason")
 

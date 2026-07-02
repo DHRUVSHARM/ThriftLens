@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import get_settings
 from app.db import run_schema_migrations
 from app.health import collect_runtime_health
 from app.routes import router
@@ -14,6 +16,14 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="ThriftLens API", lifespan=lifespan)
+settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 app.include_router(router)
 
 

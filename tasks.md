@@ -56,6 +56,50 @@ Status: Active
 | Sample/test modes do not call live providers | Unit/integration | Mock assertion tests |
 | Live smoke tests require explicit flag | Integration opt-in | `LIVE_PROVIDER_SMOKE=1` only |
 
+### Provider Resilience Phase 1
+
+| Acceptance criterion | Test level | Planned test |
+| --- | --- | --- |
+| Gemini `429` during extraction becomes a safe retryable failed job, never a stuck job | Unit/integration | Mock extraction provider raises rate-limit-shaped error through `ToolExecutionPolicy`; workflow persists failed/retryable state |
+| Provider retries use exponential backoff with jitter | Unit | Inject sleeper/jitter into `ToolExecutionPolicy` and assert bounded delay before retry |
+| `PROVIDER_MAX_RETRIES=0` makes one provider attempt only | Unit | Policy call counter remains one after retryable failure |
+| Auth/config errors are non-retryable | Unit | Configuration-shaped provider error fails without retry |
+| Provider retry behavior follows the error taxonomy | Unit | Policy classifies rate limit, timeout, auth/config, unavailable, and existing `WorkflowProviderError` correctly |
+| Worker crash marks failed/retryable instead of leaving a job active | Integration/unit | Existing worker fallback test remains passing |
+
+### Provider Resilience Phase 2
+
+| Acceptance criterion | Test level | Planned test |
+| --- | --- | --- |
+| Circuit breaker state is shared through Postgres | Integration | Policy failures update `dependency_health` for the provider operation |
+| Circuit opens after repeated configured failures | Integration | Repeated provider failures reach threshold and set state/open cooldown fields |
+| Open circuit prevents repeated doomed calls and returns safe state | Integration/unit | Policy raises `provider_circuit_open` before invoking provider call |
+| Cooldown expiry allows half-open probe and success closes circuit | Integration | Expired open circuit permits one call and resets failure state on success |
+| SerpAPI path-auth URLs and provider keys are redacted | Unit | Redaction utility and SerpAPI sanitized summary hide key/path token |
+
+### Provider Resilience Phase 3
+
+| Acceptance criterion | Test level | Planned test |
+| --- | --- | --- |
+| Unsafe image does not call SerpAPI and returns a safe user-facing message | Unit/integration | Mock image gate returns `fail_safe`; workflow ends failed with `unsafe_image` before research |
+| Non-product image does not call SerpAPI and asks for clearer product input | Unit/integration | Mock image gate returns `needs_refinement`; workflow ends `needs_refinement` with `non_product_image` |
+| Multi-product image without target text returns `needs_refinement` | Unit/integration | Mock image gate returns multiple products/no target; workflow does not extract or research |
+| Multi-product image with target text can proceed when confidently identified | Unit/integration | Image job payload includes `targetDescription`; gate proceeds and workflow completes |
+| Image+target text preserves fixed workflow and treats target text as untrusted context | Unit/integration | Gateway accepts `targetDescription`; Gemini prompt frames it as focus context, not instructions |
+| Image prompt-injection text does not alter workflow/tool selection | Unit/integration | Gate high injection risk proceeds with warning for clear product or refines when unclear |
+
+### Provider Resilience Phase 4
+
+| Acceptance criterion | Test level | Planned test |
+| --- | --- | --- |
+| Gemini task-specific model settings are documented and wired | Unit/static | Settings, `.env.example`, and Compose include extraction/fallback/repair/ranking model settings |
+| Extraction fallback is attempted at most once for rate-limit/unavailable failures | Unit | Mock Gemini primary model raises 429 and fallback model succeeds once |
+| Fallback is not used for non-fallback provider errors or identical/unset fallback model | Unit | Mock non-rate/unavailable failure and assert only primary model is called |
+| Repair uses `GEMINI_REPAIR_MODEL` without fallback routing | Unit | Mock repair call captures repair model |
+| `GEMINI_RANKING_ENABLED=false` or unset prevents ranking explainer construction in `REAL_MODE` | Unit | Provider factory returns workflow with no ranking explainer |
+| `GEMINI_RANKING_ENABLED=true` persists ranking explanation as final-brief trust metadata | Unit/integration | Mock ranking explainer returns summary and final brief includes `rankingExplanation` |
+| Ranking explanation failure does not block deterministic results | Unit/integration | Existing failure test remains passing with no `rankingExplanation` |
+
 ### Frontend Workbench
 
 | Acceptance criterion | Test level | Planned test |
@@ -89,6 +133,14 @@ Status: Active
 - [x] Frontend workbench Review Agent pass.
 - [x] Full acceptance tests and smoke checks.
 - [x] Code-structure-cleanup after each completed feature so far.
+- [x] Provider resilience Phase 1: retry/backoff and stuck-job hardening.
+- [x] Provider resilience Phase 1 Review Agent pass.
+- [x] Provider resilience Phase 2: circuit breaker and log redaction.
+- [x] Provider resilience Phase 2 Review Agent pass.
+- [x] Provider resilience Phase 3: input gate and image+text targeting.
+- [x] Provider resilience Phase 3 Review Agent pass.
+- [x] Provider resilience Phase 4: model routing and ranking explainer default-off.
+- [x] Provider resilience Phase 4 Review Agent pass.
 
 ## Verification Notes
 
@@ -138,3 +190,44 @@ Status: Active
 - Final frontend production build passed with `docker compose run --rm frontend npm run build`.
 - Final browser-driven frontend tests passed with `docker compose run --rm frontend-e2e`: `5 passed`.
 - Final whitespace check passed with `git diff --check`.
+- Manual browser E2E exposed a missing CORS preflight handler for `POST /api/research-jobs`; fixed with configured FastAPI CORS middleware and regression coverage in `test_browser_preflight_allows_configured_frontend_origin`.
+- Post-fix gateway tests passed with `docker compose exec api python -m pytest tests/test_backend_gateway.py`: `9 passed`.
+- Post-fix host preflight smoke check returned `HTTP/1.1 200 OK` with `access-control-allow-origin: http://localhost:3000`.
+- Live real-mode testing exposed `serpapi_invalid_response` because MCP/LangChain returned wrapped JSON content instead of the direct dict shape used by mock tests.
+- SerpAPI provider now unwraps structured-content artifacts, LangChain text blocks, JSON strings, and fenced JSON before normalizing source-backed products.
+- Post-fix provider integration tests passed with `docker compose exec api python -m pytest tests/test_provider_integrations.py`: `11 passed`.
+- API and worker were recreated after the provider fix; health check returned `providerMode: REAL_MODE`, no missing keys, and all dependency/provider configuration checks true.
+- Live real-mode testing exposed jobs stuck at `extracting_reference` after Gemini returned `429 Too Many Requests`; workflow now catches extraction provider failures and persists safe retryable failures instead of letting Celery crash.
+- Worker task wrapper now marks unexpected task crashes as retryable failed jobs to avoid indefinite polling states.
+- Post-fix worker orchestration tests passed with `docker compose exec api python -m pytest tests/test_worker_orchestration.py`: `10 passed`.
+- Post-fix backend gateway tests passed with the live worker stopped to avoid local DB contention: `docker compose exec api python -m pytest tests/test_backend_gateway.py`: `9 passed`; worker was restarted afterward.
+- API and worker were recreated after the stuck-job fix; health check returned `providerMode: REAL_MODE`, no missing keys, and all dependency/provider configuration checks true.
+- Provider resilience Phase 1 added configurable provider backoff/jitter, retry-after handling, stable provider error classification, and provider-boundary config error normalization.
+- Phase 1 regression coverage passed with `docker compose exec api python -m pytest tests/test_tool_policy.py tests/test_worker_orchestration.py`: `20 passed`.
+- Full backend suite passed after Phase 1 with `docker compose exec api python -m pytest tests`: `40 passed, 5 skipped`.
+- Host static runtime tests passed after Phase 1 with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`: `5 tests OK`.
+- Docker Compose validation passed after Phase 1 with `docker compose config --quiet`.
+- Code-structure-cleanup for Phase 1 kept retry/error mechanics centralized in `ToolExecutionPolicy`, preserved provider/workflow boundaries, and trimmed unnecessary classifier parameters.
+- Provider resilience Phase 1 Review Agent report added at `specs/provider-resilience/REVIEW_PHASE_1.md`; later resilience phases remain open.
+- Provider resilience Phase 2 added Postgres-backed circuit breaker state by provider operation, open-circuit fail-fast behavior, half-open recovery, and reusable provider secret/path-auth URL redaction.
+- Phase 2 regression coverage passed with `docker compose exec api python -m pytest tests/test_provider_resilience_phase2.py tests/test_tool_policy.py tests/test_provider_integrations.py`: `24 passed`.
+- Full backend suite passed after Phase 2 with `docker compose exec api python -m pytest tests`: `44 passed, 5 skipped`.
+- Host static runtime tests passed after Phase 2 with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`: `5 tests OK`.
+- Docker Compose validation passed after Phase 2 with `docker compose config --quiet`.
+- Code-structure-cleanup for Phase 2 kept SQL in `job_repository`, policy mechanics in `ToolExecutionPolicy`, and redaction in a reusable service helper.
+- Provider resilience Phase 2 Review Agent report added at `specs/provider-resilience/REVIEW_PHASE_2.md`; input gating and model routing phases remain open.
+- Provider resilience Phase 3 added schema-validated image gating, optional image `targetDescription`, `needs_refinement` state persistence, and deterministic backend enforcement for unsafe/non-product/ambiguous gate outcomes.
+- Phase 3 regression coverage passed with `docker compose exec api python -m pytest tests/test_worker_orchestration.py tests/test_backend_gateway.py tests/test_provider_integrations.py`: `39 passed`.
+- Full backend suite passed after Phase 3 with `docker compose exec api python -m pytest tests`: `51 passed, 5 skipped`.
+- Host static runtime tests passed after Phase 3 with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`: `5 tests OK`.
+- Docker Compose validation passed after Phase 3 with `docker compose config --quiet`.
+- Code-structure-cleanup for Phase 3 kept request validation in the gateway, gate policy in the workflow, Gemini prompts in the provider client, and state persistence in the repository.
+- Provider resilience Phase 3 Review Agent report added at `specs/provider-resilience/REVIEW_PHASE_3.md`; model routing remains open.
+- Provider resilience Phase 4 added task-specific Gemini model settings, bounded extraction/image-gate fallback routing, repair-model isolation, and ranking explainer default-off behavior.
+- Phase 4 focused regression coverage passed with `docker compose exec api python -m pytest tests/test_provider_integrations.py tests/test_worker_orchestration.py tests/test_runtime_infrastructure_static.py`: `37 passed, 5 skipped`.
+- Full backend suite passed after Phase 4 with `docker compose exec api python -m pytest tests`: `59 passed, 5 skipped`.
+- Host static runtime tests passed after Phase 4 with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`: `5 tests OK`.
+- Frontend production build passed after rendering optional ranking explanation trust context with `docker compose run --rm frontend npm run build`.
+- Docker Compose validation passed after Phase 4 with `docker compose config --quiet`.
+- Code-structure-cleanup for Phase 4 preserved provider/workflow/UI boundaries and tightened malformed JSON handling so invalid model output does not trigger fallback routing.
+- Provider resilience Phase 4 Review Agent report added at `specs/provider-resilience/REVIEW_PHASE_4.md`; provider resilience spec is complete through the planned phases.

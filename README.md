@@ -39,6 +39,7 @@ docker compose run --rm frontend-e2e
 Key environment variables are documented in `.env.example`. The most important knobs are:
 
 - `PROVIDER_MODE`: `SAMPLE_MODE`, `TEST_MODE`, or `REAL_MODE`
+- `CORS_ALLOWED_ORIGINS`: comma-separated browser origins allowed to call the API
 - `GEMINI_API_KEY` and `SERPAPI_API_KEY`: required only for live provider calls
 - `DATABASE_URL`, `REDIS_URL`, and MinIO settings: runtime infrastructure
 - `LIVE_PROVIDER_SMOKE`: opt-in live provider smoke tests

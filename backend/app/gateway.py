@@ -117,6 +117,18 @@ def assert_valid_text_input(create_input: CreateResearchJobInput, settings: Sett
     return text
 
 
+def normalized_optional_text(value: str | None, *, max_length: int, field_name: str) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    if len(text) > max_length:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{field_name} must be {max_length} characters or less.",
+        )
+    return text
+
+
 async def read_valid_image(file: UploadFile | None, settings: Settings) -> bytes:
     if file is None:
         raise HTTPException(
@@ -181,7 +193,17 @@ async def create_gateway_job(
 
     if create_input.input_type == "text":
         request_payload["textDescription"] = assert_valid_text_input(create_input, settings)
+        request_payload.pop("targetDescription", None)
     elif create_input.input_type == "image":
+        target_description = normalized_optional_text(
+            create_input.target_description,
+            max_length=settings.max_text_length,
+            field_name="targetDescription",
+        )
+        if target_description:
+            request_payload["targetDescription"] = target_description
+        else:
+            request_payload.pop("targetDescription", None)
         image_content = await read_valid_image(image_file, settings)
         try:
             stored_image = upload_research_image(

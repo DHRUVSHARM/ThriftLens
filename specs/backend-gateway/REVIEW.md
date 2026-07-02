@@ -13,6 +13,7 @@ Status: Approved for next slice
 - Pass: `REAL_MODE` missing provider keys return an explicit configuration error.
 - Pass: `SAMPLE_MODE` does not require live provider keys and produces visibly sample/static final brief labeling through the minimal worker task.
 - Pass: Gateway responses expose safe job state only: `jobId`, status, progress, retryability, provider mode, safe error, partial brief, and final brief.
+- Pass: Browser CORS preflight from the configured local frontend origin succeeds without allowing arbitrary origins.
 
 ## Acceptance Criteria Coverage
 
@@ -24,6 +25,7 @@ Status: Approved for next slice
 - `SAMPLE_MODE` succeeds without keys and labels sample/static output: covered by `test_sample_mode_job_eventually_gets_static_final_brief`.
 - Polling returns safe state: covered by text and image polling tests.
 - Retry refuses non-retryable jobs: covered by `test_retry_refuses_non_retryable_job`.
+- Browser CORS preflight succeeds for job creation: covered by `test_browser_preflight_allows_configured_frontend_origin`.
 
 ## Identified Gaps
 
@@ -42,5 +44,6 @@ Status: Approved for next slice
 
 - `python3 -m py_compile backend/app/config.py backend/app/db.py backend/app/storage.py backend/app/redis_client.py backend/app/health.py backend/app/async_runtime.py backend/app/schemas.py backend/app/job_repository.py backend/app/object_storage.py backend/app/gateway.py backend/app/routes.py backend/app/main.py backend/app/worker.py`
 - `docker compose exec api python -m pytest tests/test_backend_gateway.py`
+- `curl -i -X OPTIONS http://localhost:8000/api/research-jobs -H Origin:http://localhost:3000 -H Access-Control-Request-Method:POST -H Access-Control-Request-Headers:content-type`
 - `docker compose exec api python -m pytest tests`
 - `python3 -m unittest backend.tests.test_runtime_infrastructure_static`

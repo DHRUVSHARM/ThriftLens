@@ -4,10 +4,12 @@ from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.db import engine, run_schema_migrations
 from app.gateway import assert_real_mode_configured
+from app.job_repository import get_research_job
 from app.main import app
+from app.workflow import ResearchWorkflow
 
 
 @pytest.fixture
@@ -16,7 +18,11 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def client() -> AsyncClient:
+async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncClient:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "provider_mode", "SAMPLE_MODE")
+    monkeypatch.setattr("app.gateway.enqueue_research_job", lambda _: None)
+
     await engine.dispose()
     await run_schema_migrations()
     await _clear_jobs()
@@ -24,6 +30,22 @@ async def client() -> AsyncClient:
     async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
         yield test_client
     await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_browser_preflight_allows_configured_frontend_origin(client: AsyncClient) -> None:
+    response = await client.options(
+        "/api/research-jobs",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "POST" in response.headers["access-control-allow-methods"]
 
 
 @pytest.mark.anyio
@@ -62,6 +84,7 @@ async def test_sample_mode_job_eventually_gets_static_final_brief(client: AsyncC
     )
     assert response.status_code == 200
     job_id = response.json()["jobId"]
+    await ResearchWorkflow().run(job_id)
 
     final_body = None
     for _ in range(20):
@@ -142,6 +165,20 @@ async def test_create_image_job_stores_metadata_and_can_be_polled(client: AsyncC
     poll_response = await client.get(f"/api/research-jobs/{body['jobId']}")
     assert poll_response.status_code == 200
     assert poll_response.json()["safeError"] is None
+
+
+@pytest.mark.anyio
+async def test_create_image_job_accepts_target_description(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/research-jobs",
+        data={"inputType": "image", "targetDescription": "the black lamp on the left"},
+        files={"image": ("lamp.png", b"\x89PNG\r\n\x1a\nsample", "image/png")},
+    )
+
+    assert response.status_code == 200
+    job = await get_research_job(response.json()["jobId"])
+    assert job is not None
+    assert job["request_payload"]["targetDescription"] == "the black lamp on the left"
 
 
 @pytest.mark.anyio

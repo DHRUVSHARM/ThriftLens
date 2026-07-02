@@ -21,6 +21,7 @@ The gateway is the only browser-facing backend surface for research jobs. It sho
 - Real mode must fail clearly when required provider configuration is missing.
 - Sample mode must never be presented as live research.
 - The frontend must never receive provider secrets, object storage credentials, SerpAPI MCP URLs, raw provider errors, or raw image storage credentials.
+- Browser requests from configured frontend origins must pass CORS preflight without opening the API to arbitrary origins.
 
 ## Functional Requirements
 
@@ -56,6 +57,7 @@ The gateway is the only browser-facing backend surface for research jobs. It sho
   - configurable maximum queued jobs
   - configurable maximum active jobs
   - clear overload response
+- Configure CORS for the deployed/local frontend origin so browser `OPTIONS` preflight requests succeed before job creation and retry calls.
 
 ## Non-Functional Requirements
 
@@ -64,6 +66,7 @@ The gateway is the only browser-facing backend surface for research jobs. It sho
 - Gateway code should isolate validation, persistence, queue enqueueing, object storage, and response mapping into services or repositories.
 - Logs must redact secrets and secret-bearing URLs.
 - API schemas should be Pydantic models.
+- CORS must be origin-restricted by configuration; do not use a wildcard origin for production-shaped runs.
 
 ## Acceptance Criteria
 
@@ -75,6 +78,7 @@ The gateway is the only browser-facing backend surface for research jobs. It sho
 - `SAMPLE_MODE` job creation succeeds without Gemini or SerpAPI keys and returns sample/static labeling in the final brief.
 - `GET /api/research-jobs/{job_id}` returns safe status and result state without raw provider errors.
 - Retry endpoint refuses non-retryable jobs and enqueues retryable jobs.
+- Browser CORS preflight from the configured frontend origin succeeds for `POST /api/research-jobs`.
 - API tests cover validation, job creation, polling, retry, missing-key behavior, and image upload metadata.
 
 ## Error Cases

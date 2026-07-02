@@ -3,6 +3,7 @@ from celery import Celery
 from app.async_runtime import run_async
 from app.config import get_settings
 from app.health import collect_runtime_health
+from app.job_repository import mark_job_failed
 from app.workflow import run_research_workflow
 
 settings = get_settings()
@@ -27,5 +28,16 @@ def healthcheck() -> dict:
 
 @celery_app.task(name="process_research_job")
 def process_research_job(job_id: str) -> dict:
-    result = run_async(run_research_workflow(job_id))
-    return result.model_dump(by_alias=True)
+    try:
+        result = run_async(run_research_workflow(job_id))
+        return result.model_dump(by_alias=True)
+    except Exception:
+        run_async(
+            mark_job_failed(
+                job_id,
+                code="worker_task_failed",
+                message="Research worker failed unexpectedly. Try again.",
+                retryable=True,
+            )
+        )
+        return {"jobId": job_id, "status": "failed"}

@@ -33,6 +33,7 @@ class ResearchPreferences(BaseModel):
 class CreateResearchJobInput(BaseModel):
     input_type: InputType = Field(alias="inputType")
     text_description: str | None = Field(default=None, max_length=2000, alias="textDescription")
+    target_description: str | None = Field(default=None, max_length=2000, alias="targetDescription")
     research_preferences: ResearchPreferences = Field(
         default_factory=ResearchPreferences,
         alias="researchPreferences",

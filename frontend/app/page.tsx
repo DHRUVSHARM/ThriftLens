@@ -582,6 +582,11 @@ function TrustPanel({ brief }: { brief: ProductResearchBrief }) {
           ))}
         </ul>
       ) : null}
+      {brief.rankingExplanation?.summary ? (
+        <p className="mt-3 border-t border-neutral-200 pt-3 text-sm text-neutral-700">
+          {brief.rankingExplanation.summary}
+        </p>
+      ) : null}
     </section>
   );
 }

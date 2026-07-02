@@ -11,7 +11,7 @@ def build_research_workflow() -> ResearchWorkflow:
         return ResearchWorkflow(
             extraction_provider=GeminiExtractionProvider(),
             research_provider=SerpApiMCPResearchProvider(),
-            ranking_explainer=GeminiRankingExplainer(),
+            ranking_explainer=GeminiRankingExplainer() if settings.gemini_ranking_enabled else None,
         )
     return ResearchWorkflow(
         extraction_provider=SampleExtractionProvider(),

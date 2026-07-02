@@ -27,6 +27,7 @@ async def create_research_job_route(request: Request) -> CreateResearchJobRespon
             {
                 "inputType": form.get("inputType"),
                 "textDescription": form.get("textDescription"),
+                "targetDescription": form.get("targetDescription"),
                 "researchPreferences": parse_preferences(form.get("researchPreferences")),
             }
         )

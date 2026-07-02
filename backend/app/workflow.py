@@ -2,10 +2,12 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.config import get_settings
 from app.job_repository import (
     get_research_job,
     get_uploaded_images,
     mark_job_failed,
+    mark_job_needs_refinement,
     record_job_attempt,
     store_final_brief,
     store_partial_brief,
@@ -17,6 +19,7 @@ from app.ranking import deterministic_rank
 from app.sample_providers import SampleExtractionProvider, SampleResearchProvider
 from app.workflow_contracts import (
     ExtractionOutputError,
+    ImageGateResult,
     ProductReference,
     ProductResearchBrief,
     SourceProduct,
@@ -24,6 +27,21 @@ from app.workflow_contracts import (
     WorkflowResult,
     model_dump_alias,
 )
+
+PROVIDER_FAILURE_MESSAGES = {
+    "provider_rate_limited": "Provider is temporarily rate-limited. Try again in a few minutes.",
+    "provider_quota_exhausted": "Provider quota is temporarily exhausted. Try again later or use sample mode.",
+    "provider_timeout": "Provider request timed out. Try again shortly.",
+    "provider_configuration_error": "Live provider configuration is incomplete.",
+    "provider_unavailable": "Provider is temporarily unavailable. Try again shortly.",
+    "provider_circuit_open": "Provider is temporarily unavailable. Try again shortly.",
+}
+INPUT_GATE_MESSAGES = {
+    "unsafe_image": "This image cannot be processed. Upload a clear product image instead.",
+    "non_product_image": "This does not look like a product image. Upload a clearer image or describe the product in text.",
+    "ambiguous_image": "Multiple products were detected. Add a focus note or crop the image to one product.",
+    "image_instruction_risk": "This image contains instruction-like text. Add a clearer product image or focus note.",
+}
 
 
 class ResearchWorkflow:
@@ -34,6 +52,7 @@ class ResearchWorkflow:
         research_provider: SampleResearchProvider | None = None,
         ranking_explainer: Any | None = None,
     ) -> None:
+        self.settings = get_settings()
         self.extraction_provider = extraction_provider or SampleExtractionProvider()
         self.research_provider = research_provider or SampleResearchProvider()
         self.ranking_explainer = ranking_explainer
@@ -51,6 +70,27 @@ class ResearchWorkflow:
         await record_job_attempt(job_id=job_id, stage="extractReference", dependency="sample-extraction", attempt=1)
 
         try:
+            if job["input_type"] == "image":
+                await record_job_attempt(job_id=job_id, stage="gateImage", dependency="image-gate", attempt=1)
+                gate = await self._gate_image(request_payload, image_metadata)
+                gate_decision = input_gate_decision(gate, request_payload, self.settings)
+                gate_code = input_gate_code(gate)
+                if gate_decision == "fail_safe":
+                    await mark_job_failed(
+                        job_id,
+                        code=gate_code,
+                        message=safe_input_gate_message(gate_code),
+                        retryable=False,
+                    )
+                    return WorkflowResult(jobId=job_id, status="failed")
+                if gate_decision == "needs_refinement":
+                    await mark_job_needs_refinement(
+                        job_id,
+                        code=gate_code,
+                        message=safe_input_gate_message(gate_code),
+                    )
+                    return WorkflowResult(jobId=job_id, status="needs_refinement")
+
             reference = await self._extract_reference(job["input_type"], request_payload, image_metadata)
         except ExtractionOutputError:
             await mark_job_failed(
@@ -58,6 +98,22 @@ class ResearchWorkflow:
                 code="reference_extraction_failed",
                 message="We could not extract enough product detail. Try a clearer image or more specific description.",
                 retryable=True,
+            )
+            return WorkflowResult(jobId=job_id, status="failed")
+        except WorkflowProviderError as exc:
+            await record_job_attempt(
+                job_id=job_id,
+                stage="extractReference",
+                dependency="extraction-provider",
+                attempt=2,
+                error_code=exc.code,
+                retryable=exc.retryable,
+            )
+            await mark_job_failed(
+                job_id,
+                code=exc.code,
+                message=safe_provider_message(exc.code),
+                retryable=exc.retryable,
             )
             return WorkflowResult(jobId=job_id, status="failed")
 
@@ -91,20 +147,21 @@ class ResearchWorkflow:
         await update_job_stage(job_id, status="ranking_results", progress_message="Ranking source-backed candidates.")
         await record_job_attempt(job_id=job_id, stage="rankProducts", dependency="deterministic-ranking", attempt=1)
         ranked = deterministic_rank(reference, source_products)
+        ranking_explanation: dict[str, str] | None = None
         if self.ranking_explainer is not None:
             try:
-                await self.ranking_explainer.explain(reference, source_products)
-            except WorkflowProviderError:
+                ranking_explanation = await self.ranking_explainer.explain(reference, source_products)
+            except WorkflowProviderError as exc:
                 await record_job_attempt(
                     job_id=job_id,
                     stage="rankProducts",
                     dependency="ranking-model",
                     attempt=1,
-                    error_code="ranking_model_unavailable",
-                    retryable=True,
+                    error_code=exc.code,
+                    retryable=exc.retryable,
                 )
 
-        brief = self._build_final_brief(reference, ranked)
+        brief = self._build_final_brief(reference, ranked, ranking_explanation=ranking_explanation)
         final_job = await store_final_brief(
             job_id,
             final_brief=model_dump_alias(brief),
@@ -112,6 +169,20 @@ class ResearchWorkflow:
             progress_message="Research brief complete.",
         )
         return WorkflowResult(jobId=job_id, status=final_job["status"] if final_job else "complete")
+
+    async def _gate_image(
+        self,
+        request_payload: dict[str, Any],
+        image_metadata: list[dict[str, Any]],
+    ) -> ImageGateResult:
+        raw = await self.extraction_provider.gate_image(
+            request_payload=request_payload,
+            image_metadata=image_metadata,
+        )
+        try:
+            return ImageGateResult.model_validate(raw)
+        except ValidationError as exc:
+            raise ExtractionOutputError("Invalid image gate output.") from exc
 
     async def _extract_reference(
         self,
@@ -147,7 +218,13 @@ class ResearchWorkflow:
             statusReason="research_unavailable",
         )
 
-    def _build_final_brief(self, reference: ProductReference, ranked_products: list) -> ProductResearchBrief:
+    def _build_final_brief(
+        self,
+        reference: ProductReference,
+        ranked_products: list,
+        *,
+        ranking_explanation: dict[str, str] | None = None,
+    ) -> ProductResearchBrief:
         has_verified = any(product.group == "closest" and product.score >= 0.74 for product in ranked_products)
         notes = ["Sample/static data, not live market research."]
         if not has_verified:
@@ -166,6 +243,7 @@ class ResearchWorkflow:
             freshnessNote="All source data is deterministic sample/static data.",
             uncertaintyNotes=notes,
             rankedProducts=ranked_products,
+            rankingExplanation=ranking_explanation,
             userActions=["Review matches", "Refine description", "Retry with live providers when configured"],
             statusReason=None if has_verified else "possible_matches_only",
         )
@@ -175,3 +253,46 @@ async def run_research_workflow(job_id: str) -> WorkflowResult:
     from app.provider_factory import build_research_workflow
 
     return await build_research_workflow().run(job_id)
+
+
+def safe_provider_message(code: str) -> str:
+    return PROVIDER_FAILURE_MESSAGES.get(code, "Product reference extraction is temporarily unavailable. Try again shortly.")
+
+
+def safe_input_gate_message(code: str) -> str:
+    return INPUT_GATE_MESSAGES.get(code, INPUT_GATE_MESSAGES["ambiguous_image"])
+
+
+def input_gate_decision(gate: ImageGateResult, request_payload: dict[str, Any], settings: Any) -> str:
+    target_description = (request_payload.get("targetDescription") or "").strip()
+    best_candidate_confidence = max((product.confidence for product in gate.detected_products), default=0.0)
+
+    if gate.safety_status == "unsafe":
+        return "fail_safe"
+    if gate.product_suitability == "non_product":
+        return "needs_refinement"
+    if (
+        gate.product_suitability == "unclear"
+        and gate.product_likeness_confidence < settings.input_gate_min_product_confidence
+    ):
+        return "needs_refinement"
+    if gate.product_suitability == "multiple_products" and not target_description:
+        return "needs_refinement"
+    if (
+        gate.product_suitability == "multiple_products"
+        and best_candidate_confidence < settings.input_gate_target_match_confidence
+    ):
+        return "needs_refinement"
+    return gate.decision
+
+
+def input_gate_code(gate: ImageGateResult) -> str:
+    if gate.safety_status == "unsafe":
+        return "unsafe_image"
+    if gate.product_suitability == "non_product":
+        return "non_product_image"
+    if gate.injection_risk == "high" and gate.decision != "proceed":
+        return "image_instruction_risk"
+    if gate.product_suitability in {"multiple_products", "unclear"}:
+        return "ambiguous_image"
+    return "ambiguous_image"

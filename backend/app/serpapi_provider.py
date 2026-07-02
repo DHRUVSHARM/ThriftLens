@@ -1,6 +1,9 @@
+import json
+import re
 from typing import Any
 
 from app.config import get_settings
+from app.redaction import redact_provider_secrets
 from app.tool_policy import ToolExecutionPolicy
 from app.workflow_contracts import ProductReference, WorkflowProviderError
 
@@ -16,8 +19,8 @@ class SerpApiMCPResearchProvider:
     def mcp_connection_config(self) -> dict[str, Any]:
         if not self.settings.serpapi_api_key:
             raise WorkflowProviderError(
-                "serpapi_configuration_missing",
-                "SerpAPI API key is required for live research.",
+                "provider_configuration_error",
+                "Live provider configuration is incomplete.",
                 retryable=False,
             )
         return {
@@ -28,7 +31,15 @@ class SerpApiMCPResearchProvider:
         }
 
     def sanitized_connection_summary(self) -> dict[str, str]:
-        return {"server": "serpapi", "transport": "http", "auth": "configured" if self.settings.serpapi_api_key else "missing"}
+        return {
+            "server": "serpapi",
+            "transport": "http",
+            "auth": "configured" if self.settings.serpapi_api_key else "missing",
+            "url": redact_provider_secrets(
+                self.settings.build_serpapi_mcp_url(),
+                secrets=(self.settings.serpapi_api_key,),
+            ),
+        }
 
     def build_search_params(self, *, query: str, preferences: dict[str, Any]) -> dict[str, Any]:
         params = {
@@ -45,8 +56,8 @@ class SerpApiMCPResearchProvider:
     async def research(self, product_reference: ProductReference, preferences: dict[str, Any]) -> list[dict[str, Any]]:
         if not self.settings.serpapi_api_key:
             raise WorkflowProviderError(
-                "serpapi_configuration_missing",
-                "SerpAPI API key is required for live research.",
+                "provider_configuration_error",
+                "Live provider configuration is incomplete.",
                 retryable=False,
             )
 
@@ -74,8 +85,7 @@ class SerpApiMCPResearchProvider:
 
 
 def normalize_serpapi_response(response: Any) -> list[dict[str, Any]]:
-    if isinstance(response, str):
-        raise WorkflowProviderError("serpapi_invalid_response", "SerpAPI returned an unstructured response.", retryable=True)
+    response = coerce_serpapi_response(response)
     if not isinstance(response, dict):
         raise WorkflowProviderError("serpapi_invalid_response", "SerpAPI returned an invalid response.", retryable=True)
 
@@ -102,6 +112,63 @@ def normalize_serpapi_response(response: Any) -> list[dict[str, Any]]:
             }
         )
     return products
+
+
+def coerce_serpapi_response(response: Any) -> Any:
+    if isinstance(response, tuple) and len(response) == 2:
+        content, artifact = response
+        artifact_content = extract_structured_content(artifact)
+        if artifact_content is not None:
+            return artifact_content
+        return coerce_serpapi_response(content)
+
+    structured_content = extract_structured_content(response)
+    if structured_content is not None:
+        return structured_content
+
+    if isinstance(response, list):
+        for item in response:
+            coerced = coerce_serpapi_response(item)
+            if isinstance(coerced, dict):
+                return coerced
+        raise WorkflowProviderError("serpapi_invalid_response", "SerpAPI returned content without JSON results.", retryable=True)
+
+    if isinstance(response, dict) and response.get("type") == "text":
+        return parse_json_text(response.get("text"))
+
+    if isinstance(response, str):
+        return parse_json_text(response)
+
+    return response
+
+
+def extract_structured_content(value: Any) -> Any | None:
+    if isinstance(value, dict):
+        if "structured_content" in value:
+            return value["structured_content"]
+        if "structuredContent" in value:
+            return value["structuredContent"]
+        artifact = value.get("artifact")
+        if artifact is not None:
+            return extract_structured_content(artifact)
+    return None
+
+
+def parse_json_text(value: Any) -> Any:
+    if not isinstance(value, str) or not value.strip():
+        raise WorkflowProviderError("serpapi_invalid_response", "SerpAPI returned empty text content.", retryable=True)
+
+    text = value.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, flags=re.DOTALL)
+        if not match:
+            raise WorkflowProviderError("serpapi_invalid_response", "SerpAPI returned text without JSON results.", retryable=True)
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError as exc:
+            raise WorkflowProviderError("serpapi_invalid_response", "SerpAPI returned malformed JSON results.", retryable=True) from exc
 
 
 def parse_source_price(item: dict[str, Any]) -> float | None:

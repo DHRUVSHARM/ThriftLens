@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -7,6 +8,9 @@ from app.db import engine
 
 
 ACTIVE_STATUSES = ("queued", "running")
+DEPENDENCY_HEALTH_COLUMNS = (
+    "dependency, state, recent_failure_count, recent_success_count, opened_at, cooldown_until, updated_at"
+)
 
 
 def _decode_json(value: Any) -> Any:
@@ -29,6 +33,19 @@ def _job_from_row(row: Any) -> dict[str, Any]:
         "final_brief": _decode_json(mapping["final_brief"]),
         "retryable": mapping["retryable"],
         "safe_error": _decode_json(mapping["safe_error"]),
+    }
+
+
+def _dependency_health_from_row(row: Any) -> dict[str, Any]:
+    mapping = row._mapping
+    return {
+        "dependency": mapping["dependency"],
+        "state": mapping["state"],
+        "recent_failure_count": mapping["recent_failure_count"],
+        "recent_success_count": mapping["recent_success_count"],
+        "opened_at": mapping["opened_at"],
+        "cooldown_until": mapping["cooldown_until"],
+        "updated_at": mapping["updated_at"],
     }
 
 
@@ -264,6 +281,180 @@ async def update_dependency_health(
         )
 
 
+async def get_dependency_health(dependency: str) -> dict[str, Any] | None:
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text(
+                f"""
+                SELECT {DEPENDENCY_HEALTH_COLUMNS}
+                FROM dependency_health
+                WHERE dependency = :dependency
+                """
+            ),
+            {"dependency": dependency},
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        return _dependency_health_from_row(row)
+
+
+async def mark_dependency_circuit_half_open(dependency: str) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO dependency_health (
+                    dependency,
+                    state,
+                    recent_failure_count,
+                    recent_success_count,
+                    updated_at
+                )
+                VALUES (
+                    :dependency,
+                    'half_open',
+                    0,
+                    0,
+                    NOW()
+                )
+                ON CONFLICT (dependency) DO UPDATE
+                SET
+                    state = 'half_open',
+                    updated_at = NOW()
+                """
+            ),
+            {"dependency": dependency},
+        )
+
+
+async def record_dependency_circuit_success(dependency: str) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                INSERT INTO dependency_health (
+                    dependency,
+                    state,
+                    recent_failure_count,
+                    recent_success_count,
+                    opened_at,
+                    cooldown_until,
+                    updated_at
+                )
+                VALUES (
+                    :dependency,
+                    'healthy',
+                    0,
+                    1,
+                    NULL,
+                    NULL,
+                    NOW()
+                )
+                ON CONFLICT (dependency) DO UPDATE
+                SET
+                    state = 'healthy',
+                    recent_failure_count = 0,
+                    recent_success_count = dependency_health.recent_success_count + 1,
+                    opened_at = NULL,
+                    cooldown_until = NULL,
+                    updated_at = NOW()
+                """
+            ),
+            {"dependency": dependency},
+        )
+
+
+async def record_dependency_circuit_failure(
+    dependency: str,
+    *,
+    failure_threshold: int,
+    window_seconds: int,
+    cooldown_seconds: int,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(seconds=window_seconds)
+    cooldown_until = now + timedelta(seconds=cooldown_seconds)
+
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text(
+                f"""
+                SELECT {DEPENDENCY_HEALTH_COLUMNS}
+                FROM dependency_health
+                WHERE dependency = :dependency
+                FOR UPDATE
+                """
+            ),
+            {"dependency": dependency},
+        )
+        row = result.one_or_none()
+        if row is None:
+            previous_count = 0
+            updated_at = None
+        else:
+            mapping = row._mapping
+            previous_count = int(mapping["recent_failure_count"])
+            updated_at = mapping["updated_at"]
+
+        stale_window = updated_at is None or updated_at < window_start
+        failure_count = 1 if stale_window else previous_count + 1
+        state = "open" if failure_count >= failure_threshold else "degraded"
+        opened_at = now if state == "open" else None
+        circuit_cooldown_until = cooldown_until if state == "open" else None
+
+        await connection.execute(
+            text(
+                """
+                INSERT INTO dependency_health (
+                    dependency,
+                    state,
+                    recent_failure_count,
+                    recent_success_count,
+                    opened_at,
+                    cooldown_until,
+                    updated_at
+                )
+                VALUES (
+                    :dependency,
+                    :state,
+                    :failure_count,
+                    0,
+                    :opened_at,
+                    :cooldown_until,
+                    :updated_at
+                )
+                ON CONFLICT (dependency) DO UPDATE
+                SET
+                    state = EXCLUDED.state,
+                    recent_failure_count = EXCLUDED.recent_failure_count,
+                    recent_success_count = 0,
+                    opened_at = EXCLUDED.opened_at,
+                    cooldown_until = EXCLUDED.cooldown_until,
+                    updated_at = EXCLUDED.updated_at
+                """
+            ),
+            {
+                "dependency": dependency,
+                "state": state,
+                "failure_count": failure_count,
+                "opened_at": opened_at,
+                "cooldown_until": circuit_cooldown_until,
+                "updated_at": now,
+            },
+        )
+
+    return {
+        "dependency": dependency,
+        "state": state,
+        "recent_failure_count": failure_count,
+        "recent_success_count": 0,
+        "opened_at": opened_at,
+        "cooldown_until": circuit_cooldown_until,
+        "updated_at": now,
+    }
+
+
 async def update_job_stage(job_id: str, *, status: str, progress_message: str) -> None:
     async with engine.begin() as connection:
         await connection.execute(
@@ -399,6 +590,30 @@ async def mark_job_failed(job_id: str, *, code: str, message: str, retryable: bo
                 "job_id": job_id,
                 "safe_error": json.dumps(safe_error),
                 "retryable": retryable,
+                "message": message,
+            },
+        )
+
+
+async def mark_job_needs_refinement(job_id: str, *, code: str, message: str) -> None:
+    safe_error = {"code": code, "message": message, "retryable": False}
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE research_jobs
+                SET
+                    status = 'needs_refinement',
+                    safe_error = CAST(:safe_error AS JSONB),
+                    retryable = FALSE,
+                    progress_message = :message,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                """
+            ),
+            {
+                "job_id": job_id,
+                "safe_error": json.dumps(safe_error),
                 "message": message,
             },
         )
