@@ -90,6 +90,13 @@ class ResearchWorkflow:
                         message=safe_input_gate_message(gate_code),
                     )
                     return WorkflowResult(jobId=job_id, status="needs_refinement")
+                quality_reason = image_quality_extraction_reason(gate, request_payload, self.settings)
+                if quality_reason:
+                    request_payload = {
+                        **request_payload,
+                        "_useQualityExtractionModel": True,
+                        "_qualityExtractionReason": quality_reason,
+                    }
 
             reference = await self._extract_reference(job["input_type"], request_payload, image_metadata)
         except ExtractionOutputError:
@@ -296,3 +303,12 @@ def input_gate_code(gate: ImageGateResult) -> str:
     if gate.product_suitability in {"multiple_products", "unclear"}:
         return "ambiguous_image"
     return "ambiguous_image"
+
+
+def image_quality_extraction_reason(gate: ImageGateResult, request_payload: dict[str, Any], settings: Any) -> str | None:
+    target_description = (request_payload.get("targetDescription") or "").strip()
+    if gate.product_suitability == "multiple_products" and target_description:
+        return "targeted_multi_product_image"
+    if gate.product_likeness_confidence < settings.input_gate_quality_model_confidence:
+        return "low_gate_confidence"
+    return None

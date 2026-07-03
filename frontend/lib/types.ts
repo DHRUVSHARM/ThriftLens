@@ -76,6 +76,15 @@ export type ResearchJob = {
   finalBrief?: ProductResearchBrief | null;
 };
 
+export type RuntimeHealth = {
+  service: string;
+  status: string;
+  providerMode: string;
+  checks: Record<string, boolean>;
+  missingProviderKeys: string[];
+  errors: Record<string, string>;
+};
+
 export type ResearchPreferences = {
   rankingPreference: "closest" | "grouped";
   budgetMin?: number;
@@ -91,5 +100,6 @@ export type CreateJobInput =
   | {
       inputType: "image";
       image: File;
+      targetDescription?: string;
       researchPreferences: ResearchPreferences;
     };

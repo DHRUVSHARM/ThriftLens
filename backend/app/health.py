@@ -34,7 +34,7 @@ async def collect_runtime_health(service_name: str) -> dict:
         errors["minio"] = exc.__class__.__name__
 
     missing_provider_keys = settings.require_real_provider_keys()
-    if "GEMINI_API_KEY" in missing_provider_keys:
+    if any(key.startswith("GEMINI_API_KEY") for key in missing_provider_keys):
         checks["geminiConfiguration"] = False
     if "SERPAPI_API_KEY" in missing_provider_keys:
         checks["serpapiConfiguration"] = False

@@ -1,17 +1,134 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --bg-elevated: #0b1626;
+  --landing-bg: #050b14;
+  --page-gradient: linear-gradient(180deg, #050b14 0%, #07111f 34%, #0b1626 68%, #07111f 100%);
+  --hero-overlay: linear-gradient(90deg, rgb(5 11 20 / 0.82) 0%, rgb(5 11 20 / 0.76) 36%, rgb(5 11 20 / 0.2) 72%, rgb(5 11 20 / 0.48) 100%),
+    linear-gradient(180deg, rgb(5 11 20 / 0.6) 0%, rgb(5 11 20 / 0) 42%);
+  --hero-text-primary: #f6f7f2;
+  --hero-text-secondary: #d8dde5;
+  --surface: #0e1a2b;
+  --surface-raised: #132235;
+  --surface-subtle: #182b42;
+  --border: #24364d;
+  --border-strong: #40536c;
+  --text-primary: #f6f7f2;
+  --text-secondary: #d2d7df;
+  --text-muted: #8f9bab;
+  --accent: #d6a94f;
+  --accent-strong: #efc76f;
+  --accent-contrast: #07111f;
+  --success: #d6a94f;
+  --warning: #d6a94f;
+  --danger: #ef6a72;
+  --price: #efc76f;
+  --shadow-soft: 0 2px 8px rgb(0 0 0 / 0.24);
+}
+
+[data-theme="light"] {
   color-scheme: light;
+  --bg: #eceef1;
+  --bg-elevated: #f4f5f6;
+  --landing-bg: #e7e9ed;
+  --page-gradient: linear-gradient(180deg, #e5e7eb 0%, #eceef1 34%, #f4f5f6 68%, #eceef1 100%);
+  --hero-overlay: linear-gradient(90deg, rgb(232 234 237 / 0.92) 0%, rgb(232 234 237 / 0.86) 44%, rgb(232 234 237 / 0.62) 76%, rgb(232 234 237 / 0.74) 100%),
+    linear-gradient(180deg, rgb(232 234 237 / 0.86) 0%, rgb(232 234 237 / 0) 44%);
+  --hero-text-primary: #20242a;
+  --hero-text-secondary: #4e5560;
+  --surface: #f7f7f6;
+  --surface-raised: #ffffff;
+  --surface-subtle: #e3e5e8;
+  --border: #c9cdd3;
+  --border-strong: #989fa9;
+  --text-primary: #20242a;
+  --text-secondary: #4e5560;
+  --text-muted: #767f8c;
+  --accent: #b8862f;
+  --accent-strong: #8f651e;
+  --accent-contrast: #ffffff;
+  --success: #8f651e;
+  --warning: #b8862f;
+  --danger: #c2414b;
+  --price: #8f651e;
+  --shadow-soft: 0 2px 8px rgb(23 24 21 / 0.08);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+  scroll-padding-top: 24px;
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
+  background: var(--page-gradient);
+  color: var(--text-primary);
   font-family:
-    Arial,
-    Helvetica,
+    Aptos,
+    "Helvetica Neue",
+    "Nimbus Sans",
+    BlinkMacSystemFont,
     sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+img {
+  max-width: 100%;
+}
+
+section[id] {
+  scroll-margin-top: 24px;
+}
+
+.app-shell {
+  background: var(--page-gradient);
+}
+
+.landing-section,
+.workbench-section {
+  background: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  section,
+  article,
+  button,
+  input,
+  select,
+  textarea,
+  a {
+    transition:
+      background-color 240ms ease,
+      border-color 240ms ease,
+      color 240ms ease,
+      box-shadow 240ms ease,
+      opacity 240ms ease;
+  }
 }

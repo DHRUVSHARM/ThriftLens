@@ -1,4 +1,4 @@
-import type { CreateJobInput, ResearchJob } from "./types";
+import type { CreateJobInput, ResearchJob, RuntimeHealth } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -47,6 +47,9 @@ export async function createResearchJob(input: CreateJobInput): Promise<Research
     const formData = new FormData();
     formData.append("inputType", "image");
     formData.append("image", input.image);
+    if (input.targetDescription?.trim()) {
+      formData.append("targetDescription", input.targetDescription.trim());
+    }
     formData.append("researchPreferences", JSON.stringify(input.researchPreferences));
 
     const response = await fetch(`${API_BASE_URL}/api/research-jobs`, {
@@ -62,6 +65,13 @@ export async function createResearchJob(input: CreateJobInput): Promise<Research
     body: JSON.stringify(input),
   });
   return parseJsonResponse<ResearchJob>(response);
+}
+
+export async function getRuntimeHealth(): Promise<RuntimeHealth> {
+  const response = await fetch(`${API_BASE_URL}/api/health`, {
+    cache: "no-store",
+  });
+  return parseJsonResponse<RuntimeHealth>(response);
 }
 
 export async function getResearchJob(jobId: string): Promise<ResearchJob> {

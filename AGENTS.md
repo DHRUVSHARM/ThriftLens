@@ -224,7 +224,8 @@ Required workflow:
 4. Implement based on the tasks and test matrix
 5. Create or update automated tests
 6. Ensure all acceptance criteria pass
-7. Run the `skills/code-structure-cleanup/SKILL.md` workflow after the feature works and tests pass
+7. Update `.env.example`, `README.md`, and related specs for any new or changed environment variables, provider keys, deployment knobs, or paid-service configuration. Use safe placeholders, document which values are secrets, and include where reviewers should get provider keys.
+8. Run the `skills/code-structure-cleanup/SKILL.md` workflow after the feature works and tests pass
 
 Testing:
 - Prioritize coverage of acceptance criteria
@@ -276,6 +277,7 @@ The Review Agent must verify:
 3. Whether there are features implemented outside the spec
 4. Whether the code follows good readability practices
 5. Whether unnecessary complexity exists
+6. Whether `.env.example`, `README.md`, and relevant specs document all environment variables with safe placeholders, paid-key instructions, provider sources, and no real secrets
 
 Review output:
 The review must produce a report containing:

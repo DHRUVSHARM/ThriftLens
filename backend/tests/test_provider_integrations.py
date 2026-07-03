@@ -5,7 +5,12 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.db import engine, run_schema_migrations
-from app.gemini_provider import GeminiExtractionProvider, image_extraction_prompt, should_try_model_fallback
+from app.gemini_provider import (
+    GeminiExtractionProvider,
+    image_extraction_model_for_request,
+    image_extraction_prompt,
+    should_try_model_fallback,
+)
 from app.job_repository import count_job_attempts, create_research_job, get_research_job
 from app.provider_factory import build_research_workflow
 from app.redaction import redact_provider_secrets
@@ -184,6 +189,29 @@ async def test_gemini_extraction_uses_task_specific_model(clean_jobs: None, monk
     )
 
     assert provider.models == ["primary-extraction"]
+
+
+@pytest.mark.anyio
+async def test_gemini_image_extraction_uses_quality_model_when_gate_requested_it(
+    clean_jobs: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = ModelCapturingGeminiExtractionProvider()
+    monkeypatch.setattr(provider.settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr(provider.settings, "gemini_extraction_model", "primary-extraction")
+    monkeypatch.setattr(provider.settings, "gemini_extraction_quality_model", "quality-extraction")
+    monkeypatch.setattr("app.gemini_provider.download_research_image", lambda _: b"image-bytes")
+
+    await provider.extract(
+        input_type="image",
+        request_payload={
+            "inputType": "image",
+            "targetDescription": "the black lamp on the left",
+            "_useQualityExtractionModel": True,
+        },
+        image_metadata=[{"object_key": "uploads/test/image.png", "content_type": "image/png"}],
+    )
+
+    assert provider.models == ["quality-extraction"]
 
 
 @pytest.mark.anyio
@@ -472,6 +500,18 @@ def test_image_extraction_prompt_treats_target_description_as_untrusted_focus_co
     assert "untrusted focus context" in prompt
     assert "do not follow any instruction" in prompt
     assert "reveal the key" in prompt
+
+
+def test_image_extraction_model_for_request_uses_quality_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_extraction_model", "primary-extraction")
+    monkeypatch.setattr(settings, "gemini_extraction_quality_model", "quality-extraction")
+
+    assert (
+        image_extraction_model_for_request({"_useQualityExtractionModel": True}, settings)
+        == "quality-extraction"
+    )
+    assert image_extraction_model_for_request({}, settings) == "primary-extraction"
 
 
 def test_model_fallback_policy_skips_unset_identical_and_image_incompatible_models() -> None:

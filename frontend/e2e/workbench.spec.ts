@@ -39,6 +39,25 @@ function queuedJob(jobId: string) {
   };
 }
 
+async function mockHealth(page: Page, providerMode = "SAMPLE_MODE") {
+  await page.route("**/api/health", async (route) =>
+    jsonResponse(route, {
+      service: "thriftlens-api",
+      status: "ok",
+      providerMode,
+      checks: {
+        postgres: true,
+        redis: true,
+        minio: true,
+        geminiConfiguration: true,
+        serpapiConfiguration: true,
+      },
+      missingProviderKeys: [],
+      errors: {},
+    }),
+  );
+}
+
 const deskLampBrief = {
   mode: "sample",
   label: "Sample/static result",
@@ -202,6 +221,7 @@ async function mockJobFlow(page: Page, jobId: string, finalPayload: Record<strin
     } else {
       expect(postData).toContain('name="inputType"');
       expect(postData).toContain("image");
+      expect(postData).toContain("targetDescription");
     }
 
     return jsonResponse(route, queuedJob(jobId));
@@ -210,21 +230,22 @@ async function mockJobFlow(page: Page, jobId: string, finalPayload: Record<strin
   await page.route(`**/api/research-jobs/${jobId}`, async (route) => jsonResponse(route, finalPayload));
 }
 
-test("renders the workbench with explicit modes and no horizontal mobile overflow", async ({ page }) => {
+test("renders the unified workbench and has no horizontal mobile overflow", async ({ page }) => {
+  await mockHealth(page);
   await page.setViewportSize({ width: 390, height: 820 });
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Product research workbench" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Image", exact: true })).toHaveAttribute("aria-selected", "true");
-  await page.getByRole("button", { name: "Text", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Text", exact: true })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByLabel("Product description")).toBeVisible();
+  await expect(page.getByText("ThriftLens", { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("Describe the product you want to find")).toBeVisible();
+  await expect(page.getByText("Drop or upload image")).toBeVisible();
+  await page.getByRole("button", { name: /theme/i }).click();
 
   const hasNoHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(hasNoHorizontalOverflow).toBe(true);
 });
 
 test("submits a text job, polls to complete results, and copies a source-backed summary", async ({ page }) => {
+  await mockHealth(page);
   await page.addInitScript(() => {
     let copiedText = "";
     Object.defineProperty(navigator, "clipboard", {
@@ -240,13 +261,12 @@ test("submits a text job, polls to complete results, and copies a source-backed 
   await mockJobFlow(page, textJobId, completeJob(textJobId, deskLampBrief), "text");
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Text" }).click();
-  await page.getByLabel("Product description").fill("minimal black desk lamp with wireless charging");
+  await page.getByPlaceholder("Describe the product you want to find").fill("minimal black desk lamp with wireless charging");
   await page.getByRole("button", { name: "Start research" }).click();
 
-  await expect(page.getByText("Research queued.").first()).toBeVisible();
-  await expect(page.getByText("Sample/static result").first()).toBeVisible({ timeout: 7_000 });
-  await expect(page.getByRole("heading", { name: "Closest match" })).toBeVisible();
+  await expect(page.getByText("Preparing research").first()).toBeVisible();
+  await expect(page.getByText("Sample/static").first()).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByRole("heading", { name: "Best match" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Minimal Black Desk Lamp", exact: true })).toBeVisible();
   await expect(page.getByText("$42.50", { exact: true })).toBeVisible();
   await expect(page.getByText("Matched source-backed product data.")).toBeVisible();
@@ -260,11 +280,12 @@ test("submits a text job, polls to complete results, and copies a source-backed 
 });
 
 test("validates image input and submits an image job", async ({ page }) => {
+  await mockHealth(page);
   await mockJobFlow(page, imageJobId, completeJob(imageJobId, bottleBrief), "image");
 
   await page.goto("/");
   await page.getByRole("button", { name: "Start research" }).click();
-  await expect(page.getByText("Upload a JPEG, PNG, or WebP image before starting research.")).toBeVisible();
+  await expect(page.getByText("Add a product image, a description, or both before starting research.")).toBeVisible();
 
   await page.setInputFiles("#product-image", {
     name: "notes.txt",
@@ -279,14 +300,16 @@ test("validates image input and submits an image job", async ({ page }) => {
     buffer: Buffer.from("fake png bytes"),
   });
   await expect(page.getByText("bottle.png")).toBeVisible();
+  await page.getByPlaceholder("What should ThriftLens focus on in this image?").fill("the silver bottle in the center");
   await page.getByRole("button", { name: "Start research" }).click();
 
   await expect(page.getByText("stainless steel insulated water bottle")).toBeVisible({ timeout: 7_000 });
   await expect(page.getByRole("heading", { name: "Insulated Steel Bottle", exact: true })).toBeVisible();
-  await expect(page.getByText("$31.00", { exact: true })).toBeVisible();
+  await expect(page.getByRole("article").getByText("$31.00", { exact: true })).toBeVisible();
 });
 
 test("renders research unavailable partial state without fake product cards", async ({ page }) => {
+  await mockHealth(page);
   await page.route("**/api/research-jobs", async (route) => {
     if (route.request().method() !== "POST") {
       return route.fallback();
@@ -307,25 +330,24 @@ test("renders research unavailable partial state without fake product cards", as
   );
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Text" }).click();
-  await page.getByLabel("Product description").fill("minimal black desk lamp with wireless charging");
+  await page.getByPlaceholder("Describe the product you want to find").fill("minimal black desk lamp with wireless charging");
   await page.getByRole("button", { name: "Start research" }).click();
 
-  await expect(page.getByText("Research sources are unavailable.", { exact: true })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByText("Research sources are unavailable", { exact: true })).toBeVisible({ timeout: 7_000 });
   await expect(page.getByText("Reference extracted, but source-backed research is unavailable.").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Source" })).toHaveCount(0);
 });
 
 test("separates possible matches when no verified match exists", async ({ page }) => {
+  await mockHealth(page);
   await mockJobFlow(page, possibleJobId, completeJob(possibleJobId, possibleOnlyBrief), "text");
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Text", exact: true }).click();
-  await page.getByLabel("Product description").fill("no verified black desk lamp");
+  await page.getByPlaceholder("Describe the product you want to find").fill("no verified black desk lamp");
   await page.getByRole("button", { name: "Start research" }).click();
 
-  await expect(page.getByText("No verified closest match found.")).toBeVisible({ timeout: 7_000 });
-  await expect(page.getByRole("heading", { name: "Possible matches" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Strongest candidate" })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByText("No exact match was verified")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Adjustable Black Desk Lamp", exact: true })).toBeVisible();
   await expect(page.getByText("Related product, but not enough overlap for a verified match.")).toBeVisible();
 });

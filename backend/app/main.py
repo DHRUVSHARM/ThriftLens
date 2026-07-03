@@ -6,8 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.db import run_schema_migrations
 from app.health import collect_runtime_health
+from app.logging_config import configure_secret_redaction_logging
 from app.routes import router
 
+configure_secret_redaction_logging()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):

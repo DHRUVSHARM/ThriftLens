@@ -19,9 +19,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
 
     gemini_api_key: str = ""
+    google_api_key: str = ""
+    google_cloud_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash"
     gemini_extraction_model: str = ""
     gemini_extraction_fallback_model: str = ""
+    gemini_extraction_quality_model: str = ""
     gemini_repair_model: str = ""
     gemini_ranking_model: str = ""
     gemini_ranking_enabled: bool = False
@@ -38,6 +41,7 @@ class Settings(BaseSettings):
     circuit_breaker_cooldown_seconds: int = Field(default=300, ge=1)
     input_gate_min_product_confidence: float = Field(default=0.65, ge=0, le=1)
     input_gate_target_match_confidence: float = Field(default=0.70, ge=0, le=1)
+    input_gate_quality_model_confidence: float = Field(default=0.82, ge=0, le=1)
     input_gate_max_products_without_target: int = Field(default=1, ge=1)
 
     minio_endpoint: str = "minio:9000"
@@ -56,11 +60,14 @@ class Settings(BaseSettings):
     def require_real_provider_keys(self) -> list[str]:
         missing: list[str] = []
         if self.provider_mode == "REAL_MODE":
-            if not self.gemini_api_key:
-                missing.append("GEMINI_API_KEY")
+            if not self.gemini_provider_api_key():
+                missing.append("GEMINI_API_KEY or GOOGLE_CLOUD_API_KEY")
             if not self.serpapi_api_key:
                 missing.append("SERPAPI_API_KEY")
         return missing
+
+    def gemini_provider_api_key(self) -> str:
+        return self.gemini_api_key.strip() or self.google_api_key.strip() or self.google_cloud_api_key.strip()
 
     def build_serpapi_mcp_url(self) -> str:
         base_url = self.serpapi_mcp_base_url.rstrip("/")
@@ -76,6 +83,9 @@ class Settings(BaseSettings):
         if not fallback or fallback == self.gemini_extraction_model_name():
             return None
         return fallback
+
+    def gemini_extraction_quality_model_name(self) -> str:
+        return self.gemini_extraction_quality_model.strip() or self.gemini_extraction_fallback_model_name() or self.gemini_extraction_model_name()
 
     def gemini_repair_model_name(self) -> str:
         return self.gemini_repair_model.strip() or self.gemini_extraction_model_name()

@@ -93,6 +93,7 @@ Status: Active
 | Acceptance criterion | Test level | Planned test |
 | --- | --- | --- |
 | Gemini task-specific model settings are documented and wired | Unit/static | Settings, `.env.example`, and Compose include extraction/fallback/repair/ranking model settings |
+| Image gate routes accepted difficult images to quality extraction | Unit/integration | Multi-product with target text and accepted low-confidence images set quality extraction hint; provider uses `GEMINI_EXTRACTION_QUALITY_MODEL` |
 | Extraction fallback is attempted at most once for rate-limit/unavailable failures | Unit | Mock Gemini primary model raises 429 and fallback model succeeds once |
 | Fallback is not used for non-fallback provider errors or identical/unset fallback model | Unit | Mock non-rate/unavailable failure and assert only primary model is called |
 | Repair uses `GEMINI_REPAIR_MODEL` without fallback routing | Unit | Mock repair call captures repair model |
@@ -141,6 +142,10 @@ Status: Active
 - [x] Provider resilience Phase 3 Review Agent pass.
 - [x] Provider resilience Phase 4: model routing and ranking explainer default-off.
 - [x] Provider resilience Phase 4 Review Agent pass.
+- [x] Workbench redesign implementation: modular interactive UI, unified input, theme toggle, research rail, and result modules.
+- [ ] Workbench redesign manual local design review.
+- [ ] Workbench redesign feedback fixes.
+- [ ] Workbench redesign Review Agent pass.
 
 ## Verification Notes
 
@@ -223,11 +228,18 @@ Status: Active
 - Docker Compose validation passed after Phase 3 with `docker compose config --quiet`.
 - Code-structure-cleanup for Phase 3 kept request validation in the gateway, gate policy in the workflow, Gemini prompts in the provider client, and state persistence in the repository.
 - Provider resilience Phase 3 Review Agent report added at `specs/provider-resilience/REVIEW_PHASE_3.md`; model routing remains open.
-- Provider resilience Phase 4 added task-specific Gemini model settings, bounded extraction/image-gate fallback routing, repair-model isolation, and ranking explainer default-off behavior.
-- Phase 4 focused regression coverage passed with `docker compose exec api python -m pytest tests/test_provider_integrations.py tests/test_worker_orchestration.py tests/test_runtime_infrastructure_static.py`: `37 passed, 5 skipped`.
-- Full backend suite passed after Phase 4 with `docker compose exec api python -m pytest tests`: `59 passed, 5 skipped`.
+- Provider resilience Phase 4 added task-specific Gemini model settings, bounded extraction/image-gate fallback routing, gate-driven quality extraction routing, repair-model isolation, and ranking explainer default-off behavior.
+- Phase 4 focused regression coverage passed with `docker compose run --rm api python -m pytest tests/test_provider_integrations.py tests/test_worker_orchestration.py tests/test_runtime_infrastructure_static.py`: `41 passed, 5 skipped`.
+- Full backend suite passed after Phase 4 with `docker compose run --rm api python -m pytest tests`: `65 passed, 5 skipped`.
 - Host static runtime tests passed after Phase 4 with `python3 -m unittest backend.tests.test_runtime_infrastructure_static`: `5 tests OK`.
-- Frontend production build passed after rendering optional ranking explanation trust context with `docker compose run --rm frontend npm run build`.
 - Docker Compose validation passed after Phase 4 with `docker compose config --quiet`.
-- Code-structure-cleanup for Phase 4 preserved provider/workflow/UI boundaries and tightened malformed JSON handling so invalid model output does not trigger fallback routing.
+- `.env` and `.env.example` key structure diff check passed after adding quality-routing configuration; `.env` keeps real local values while `.env.example` keeps safe placeholders and reviewer instructions.
+- Code-structure-cleanup for Phase 4 preserved provider/workflow/UI boundaries, kept repair on the repair model without fallback cascade, and kept quality routing as a workflow hint consumed by the provider.
 - Provider resilience Phase 4 Review Agent report added at `specs/provider-resilience/REVIEW_PHASE_4.md`; provider resilience spec is complete through the planned phases.
+- Workbench redesign replaced explicit image/text tabs with a unified input that supports text-only, image-only, and image+focus-text submissions.
+- Workbench redesign split the monolithic frontend page into local workbench modules and UI primitives under `frontend/components/workbench`.
+- Workbench redesign added light/dark theme tokens, persisted theme toggle, research rail, insight header, best-match-first result hierarchy, price context, grouped alternatives, reference signals, and trust/evidence modules.
+- Frontend production build passed after workbench redesign with `docker compose run --rm frontend npm run build`.
+- Browser-driven frontend smoke tests passed after workbench redesign with `docker compose run --rm frontend-e2e`: `5 passed`.
+- Frontend, API, and worker were rebuilt/recreated for manual review with `docker compose up -d --build frontend` and `docker compose up -d --build worker`.
+- Container-internal frontend and API smoke checks passed; host `curl` from this sandbox could not reach localhost despite Compose publishing ports, so manual browser review should use the user's host browser at `http://localhost:3000`.

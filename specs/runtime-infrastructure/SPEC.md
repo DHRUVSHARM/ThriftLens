@@ -41,6 +41,8 @@ ThriftLens uses asynchronous product research jobs. The web gateway must stay re
   - `DB_MAX_OVERFLOW`
   - `REDIS_URL`
   - `GEMINI_API_KEY`
+  - `GOOGLE_API_KEY`
+  - `GOOGLE_CLOUD_API_KEY`
   - `SERPAPI_API_KEY`
   - `SERPAPI_MCP_BASE_URL`
   - `MINIO_ENDPOINT`
@@ -90,7 +92,7 @@ ThriftLens uses asynchronous product research jobs. The web gateway must stay re
 - Postgres unavailable: API returns service unavailable for job creation/status.
 - Redis unavailable: API returns service unavailable before pretending a job was queued.
 - MinIO unavailable during image upload: job is not accepted and the user sees a recoverable upload/storage error.
-- Missing `GEMINI_API_KEY` or `SERPAPI_API_KEY` in `REAL_MODE`: job is rejected or fails with explicit provider configuration error.
+- Missing a Gemini-compatible key (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_CLOUD_API_KEY`) or `SERPAPI_API_KEY` in `REAL_MODE`: job is rejected or fails with explicit provider configuration error.
 
 ## Out of Scope
 

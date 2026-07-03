@@ -113,6 +113,7 @@ Provider policy must not retry unsafe input, non-product input, ambiguous input,
 - Split Gemini model settings by task:
   - extraction model
   - extraction fallback model
+  - extraction quality model
   - repair model
   - ranking explanation model
 - Fallback model routing must be task-specific and bounded.
@@ -122,16 +123,17 @@ Provider policy must not retry unsafe input, non-product input, ambiguous input,
 - Ranking explanations may be enabled only when the UI stores/renders the explanation as useful trust context.
 - Ranking explanations may be skipped under quota pressure; deterministic ranking must still complete.
 - Image extraction may require a multimodal-capable model and should not fallback to a text-only model.
+- Image gate output should route accepted but visually difficult image extraction to `GEMINI_EXTRACTION_QUALITY_MODEL`.
 
 Default model routing:
 
-| Operation | Primary setting | Fallback setting | Fallback allowed? | Failure behavior |
-| --- | --- | --- | --- | --- |
-| image safety/product gate | `GEMINI_EXTRACTION_MODEL` | `GEMINI_EXTRACTION_FALLBACK_MODEL` | Yes if multimodal-capable | `needs_refinement`/`failed` on final failure |
-| image extraction | `GEMINI_EXTRACTION_MODEL` | `GEMINI_EXTRACTION_FALLBACK_MODEL` | Yes if multimodal-capable | `failed` retryable on final provider failure |
-| text extraction | `GEMINI_EXTRACTION_MODEL` | `GEMINI_EXTRACTION_FALLBACK_MODEL` | Yes | `failed` retryable on final provider failure |
-| schema repair | `GEMINI_REPAIR_MODEL` | none | No | `failed` retryable on invalid repair |
-| ranking explanation | `GEMINI_RANKING_MODEL` only when `GEMINI_RANKING_ENABLED=true` | none | No | skip explanation and complete deterministic ranking |
+| Operation | Primary setting | Quality/escalation setting | Fallback setting | Fallback allowed? | Failure behavior |
+| --- | --- | --- | --- | --- | --- |
+| image safety/product gate | `GEMINI_EXTRACTION_MODEL` | none | `GEMINI_EXTRACTION_FALLBACK_MODEL` | Yes if multimodal-capable | `needs_refinement`/`failed` on final failure |
+| image extraction | `GEMINI_EXTRACTION_MODEL` or `GEMINI_EXTRACTION_QUALITY_MODEL` when gate indicates complexity | `GEMINI_EXTRACTION_QUALITY_MODEL` | `GEMINI_EXTRACTION_FALLBACK_MODEL` for fast-path failures | Yes if multimodal-capable | `failed` retryable on final provider failure |
+| text extraction | `GEMINI_EXTRACTION_MODEL` | none | `GEMINI_EXTRACTION_FALLBACK_MODEL` | Yes | `failed` retryable on final provider failure |
+| schema repair | `GEMINI_REPAIR_MODEL` | none | none | No | `failed` retryable on invalid repair |
+| ranking explanation | `GEMINI_RANKING_MODEL` only when `GEMINI_RANKING_ENABLED=true` | none | none | No | skip explanation and complete deterministic ranking |
 
 Fallback routing rules:
 
@@ -140,13 +142,15 @@ Fallback routing rules:
 - If the fallback model is unset, identical to the primary model, or incompatible with image input, do not fallback.
 - Fallback routing should not increase SerpAPI calls.
 - Fallback routing should not change final source-backed facts.
+- Quality escalation is not a fallback retry; it is the first image extraction model choice after a successful image gate.
+- Quality escalation should be used for targeted multi-product images and accepted low-confidence image gate results.
 
 Source-backed model recommendation:
 
 | Task | Recommended default | Escalation/fallback | Rationale |
 | --- | --- | --- | --- |
-| image safety/product gate | `gemini-3.1-flash-lite` | `gemini-3.5-flash` only for low-confidence/ambiguous cases | Gate is structured classification and should be cheap/high-throughput; Google describes 3.1 Flash-Lite as the cost-efficient model for simple data processing. |
-| text extraction | `gemini-3.1-flash-lite` | `gemini-3.5-flash` when schema confidence is low or repair fails | Text-to-reference extraction is structured data extraction, which Gemini structured outputs explicitly supports. |
+| image safety/product gate | `gemini-3.1-flash-lite` | `gemini-3.5-flash` only after rate-limit/provider-unavailable failure | Gate is structured classification and should be cheap/high-throughput; Google describes 3.1 Flash-Lite as the cost-efficient model for simple data processing. The gate's confidence should route the later extraction step, not recursively re-run classification. |
+| text extraction | `gemini-3.1-flash-lite` | `gemini-3.5-flash` after rate-limit/provider-unavailable failure only | Text-to-reference extraction is structured data extraction, which Gemini structured outputs explicitly supports. Invalid schema goes to repair, not model fallback. |
 | image extraction | `gemini-3.1-flash-lite` for clear images | `gemini-3.5-flash` for small details, OCR-heavy images, or multi-object ambiguity with target text | Gemini models are multimodal and support image captioning/classification/object detection; use the cheaper model first and escalate only when visual detail matters. |
 | schema repair | `gemini-3.1-flash-lite` | none | Repair is small text-only schema conversion; rerouting can create extra quota burn with little value. |
 | ranking explanation | disabled by default; `gemini-3.1-flash-lite` only when enabled | none | Deterministic ranking is the source of truth; model explanation is optional polish and should not spend tokens unless shown to the user. |
@@ -324,8 +328,12 @@ UI-facing safe messages:
 - `PROVIDER_BACKOFF_BASE_SECONDS`
 - `PROVIDER_BACKOFF_MAX_SECONDS`
 - `PROVIDER_JITTER_RATIO`
+- `GEMINI_API_KEY`
+- `GOOGLE_API_KEY`
+- `GOOGLE_CLOUD_API_KEY`
 - `GEMINI_EXTRACTION_MODEL`
 - `GEMINI_EXTRACTION_FALLBACK_MODEL`
+- `GEMINI_EXTRACTION_QUALITY_MODEL`
 - `GEMINI_REPAIR_MODEL`
 - `GEMINI_RANKING_MODEL`
 - `GEMINI_RANKING_ENABLED`
@@ -334,6 +342,7 @@ UI-facing safe messages:
 - `CIRCUIT_BREAKER_COOLDOWN_SECONDS`
 - `INPUT_GATE_MIN_PRODUCT_CONFIDENCE`
 - `INPUT_GATE_TARGET_MATCH_CONFIDENCE`
+- `INPUT_GATE_QUALITY_MODEL_CONFIDENCE`
 - `INPUT_GATE_MAX_PRODUCTS_WITHOUT_TARGET`
 
 ## Acceptance Criteria
@@ -399,7 +408,9 @@ Phase 3: Input gate and image+text targeting
 Phase 4: Model routing
 
 - Add task-specific model settings.
-- Add bounded fallback routing for extraction/repair.
+- Add bounded fallback routing for extraction only.
+- Add gate-driven quality routing for visually difficult image extraction.
+- Keep schema repair on the configured repair model with no fallback cascade.
 - Skip ranking explanation under quota pressure.
 - Add tests for fallback and skip behavior.
 

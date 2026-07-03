@@ -70,8 +70,9 @@ This is a working document. Keep notes concise while the product is being define
 - Provider resilience Phase 1: moved live provider retry/backoff and error normalization into `ToolExecutionPolicy`, using safe UI-facing error codes so rate limits and provider failures end as explicit job states instead of indefinite polling.
 - Provider resilience Phase 2: added Postgres-backed operation-level circuit breakers and SerpAPI secret redaction so repeated provider failures fail fast without burning quota or exposing path-auth URLs.
 - Provider resilience Phase 3: added an image safety/product-suitability gate and optional target text so ambiguous room/shelf photos ask for refinement instead of guessing or calling source research on the wrong product.
-- Provider resilience Phase 4: split Gemini model routing by extraction, repair, fallback, and ranking explanation; ranking explanations are default-off and only persisted/rendered when explicitly enabled, keeping deterministic source-backed ranking as the reliable path.
+- Provider resilience Phase 4: split Gemini model routing by fast extraction, quality image extraction, repair, fallback, and ranking explanation; repair stays cheap/isolated while image gate can route accepted difficult images to a stronger extraction model.
 - UI follow-up: current workbench proves the flow, but the next spec moves toward a unified input surface, clearer research pipeline, stronger result hierarchy, and a sleeker product-research interface.
+- Workbench redesign slice: moved from tabbed form/scroll panels to a modular interactive workbench with unified image/text/focus input, theme toggle, research rail, best-match-first result modules, and manual browser review as the UI quality gate.
 - Working product name: ThriftLens.
 - PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
 - Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.

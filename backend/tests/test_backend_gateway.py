@@ -198,6 +198,8 @@ def test_real_mode_missing_provider_keys_is_explicit() -> None:
     settings = Settings(
         provider_mode="REAL_MODE",
         gemini_api_key="",
+        google_api_key="",
+        google_cloud_api_key="",
         serpapi_api_key="",
     )
 
@@ -206,4 +208,26 @@ def test_real_mode_missing_provider_keys_is_explicit() -> None:
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail["code"] == "provider_configuration_missing"
-    assert exc_info.value.detail["missing"] == ["GEMINI_API_KEY", "SERPAPI_API_KEY"]
+    assert exc_info.value.detail["missing"] == ["GEMINI_API_KEY or GOOGLE_CLOUD_API_KEY", "SERPAPI_API_KEY"]
+
+
+def test_real_mode_accepts_starter_google_cloud_api_key_alias() -> None:
+    settings = Settings(
+        provider_mode="REAL_MODE",
+        gemini_api_key="",
+        google_cloud_api_key="cloud-key",
+        serpapi_api_key="serpapi-key",
+    )
+
+    assert settings.gemini_provider_api_key() == "cloud-key"
+    assert_real_mode_configured(settings)
+
+
+def test_gemini_api_key_takes_precedence_over_google_aliases() -> None:
+    settings = Settings(
+        gemini_api_key="gemini-key",
+        google_api_key="google-key",
+        google_cloud_api_key="cloud-key",
+    )
+
+    assert settings.gemini_provider_api_key() == "gemini-key"

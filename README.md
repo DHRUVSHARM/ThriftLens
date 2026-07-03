@@ -18,7 +18,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Default mode is `SAMPLE_MODE`, so the runtime can start without live Gemini or SerpAPI keys. For real provider calls, set `PROVIDER_MODE=REAL_MODE` and fill `GEMINI_API_KEY` and `SERPAPI_API_KEY`.
+Default mode is `SAMPLE_MODE`, so the runtime can start without live Gemini or SerpAPI keys. For real provider calls, set `PROVIDER_MODE=REAL_MODE` and fill `SERPAPI_API_KEY` plus one Gemini-compatible key: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or the starter-template `GOOGLE_CLOUD_API_KEY`.
 
 Useful URLs:
 
@@ -36,11 +36,12 @@ docker compose run --rm frontend npm run build
 docker compose run --rm frontend-e2e
 ```
 
-Key environment variables are documented in `.env.example`. The most important knobs are:
+Key environment variables, safe placeholders, and paid-key source notes are documented in `.env.example`. The most important knobs are:
 
 - `PROVIDER_MODE`: `SAMPLE_MODE`, `TEST_MODE`, or `REAL_MODE`
 - `CORS_ALLOWED_ORIGINS`: comma-separated browser origins allowed to call the API
-- `GEMINI_API_KEY` and `SERPAPI_API_KEY`: required only for live provider calls
+- `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_CLOUD_API_KEY`: one Gemini-compatible key is required only for live provider calls
+- `SERPAPI_API_KEY`: required only for live source research
 - `DATABASE_URL`, `REDIS_URL`, and MinIO settings: runtime infrastructure
 - `LIVE_PROVIDER_SMOKE`: opt-in live provider smoke tests
 

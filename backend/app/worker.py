@@ -4,8 +4,10 @@ from app.async_runtime import run_async
 from app.config import get_settings
 from app.health import collect_runtime_health
 from app.job_repository import mark_job_failed
+from app.logging_config import configure_secret_redaction_logging
 from app.workflow import run_research_workflow
 
+configure_secret_redaction_logging()
 settings = get_settings()
 
 celery_app = Celery(

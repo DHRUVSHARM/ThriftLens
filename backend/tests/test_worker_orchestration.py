@@ -105,12 +105,14 @@ class GateFixtureExtractionProvider(SampleExtractionProvider):
     def __init__(self, gate_result: dict) -> None:
         self.gate_result = gate_result
         self.extract_called = False
+        self.extract_payload: dict | None = None
 
     async def gate_image(self, *, request_payload: dict, image_metadata: list[dict]) -> dict:
         return self.gate_result
 
     async def extract(self, *, input_type: str, request_payload: dict, image_metadata: list[dict]) -> dict:
         self.extract_called = True
+        self.extract_payload = request_payload
         return await super().extract(input_type=input_type, request_payload=request_payload, image_metadata=image_metadata)
 
 
@@ -285,7 +287,39 @@ async def test_multi_product_image_with_target_text_can_proceed(client: AsyncCli
     assert result.status == "complete"
     assert job["status"] == "complete"
     assert extraction_provider.extract_called is True
+    assert extraction_provider.extract_payload is not None
+    assert extraction_provider.extract_payload["_useQualityExtractionModel"] is True
+    assert extraction_provider.extract_payload["_qualityExtractionReason"] == "targeted_multi_product_image"
     assert research_provider.calls == 1
+
+
+@pytest.mark.anyio
+async def test_clear_high_confidence_image_uses_fast_extraction_path(client: AsyncClient) -> None:
+    job_id = await _create_image_job(client)
+    extraction_provider = GateFixtureExtractionProvider(
+        gate_result(suitability="single_product", decision="proceed", confidence=0.95)
+    )
+
+    result = await ResearchWorkflow(extraction_provider=extraction_provider).run(job_id)
+
+    assert result.status == "complete"
+    assert extraction_provider.extract_payload is not None
+    assert "_useQualityExtractionModel" not in extraction_provider.extract_payload
+
+
+@pytest.mark.anyio
+async def test_low_confidence_but_accepted_image_uses_quality_extraction_model(client: AsyncClient) -> None:
+    job_id = await _create_image_job(client)
+    extraction_provider = GateFixtureExtractionProvider(
+        gate_result(suitability="single_product", decision="proceed", confidence=0.72)
+    )
+
+    result = await ResearchWorkflow(extraction_provider=extraction_provider).run(job_id)
+
+    assert result.status == "complete"
+    assert extraction_provider.extract_payload is not None
+    assert extraction_provider.extract_payload["_useQualityExtractionModel"] is True
+    assert extraction_provider.extract_payload["_qualityExtractionReason"] == "low_gate_confidence"
 
 
 @pytest.mark.anyio
