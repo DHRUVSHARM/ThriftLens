@@ -2,6 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# internal workflows schemas
 
 class DetectedProduct(BaseModel):
     label: str

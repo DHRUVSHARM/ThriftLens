@@ -48,6 +48,40 @@ UNAVAILABLE_MARKERS = (
 )
 
 
+"""
+run(dependency, operation, call)
+    |
+    v
+_raise_if_circuit_open(operation)
+    |
+    v
+for attempt in 0..max_retries:
+    |
+    v
+    asyncio.wait_for(call(), timeout)
+        |
+        ├── success
+        |       update_dependency_health(dependency, healthy)
+        |       record circuit success
+        |       return result
+        |
+        ├── WorkflowProviderError
+        |       classify it
+        |       mark degraded
+        |       record circuit failure
+        |       retry if allowed
+        |
+        ├── timeout
+        |       convert to provider_timeout
+        |       mark degraded
+        |       retry if allowed
+        |
+        └── unknown exception
+                classify generic exception
+                mark degraded
+                retry if allowed
+"""
+
 class ToolExecutionPolicy:
     def __init__(
         self,

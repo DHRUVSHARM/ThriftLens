@@ -2,7 +2,7 @@ from minio import Minio
 
 from app.config import get_settings
 
-
+# TODO : sync function called as part of async job with wrappers, investigate reason for this choice and if it can be made better 
 def create_minio_client() -> Minio:
     settings = get_settings()
     return Minio(

@@ -2,7 +2,7 @@ from typing import Any
 
 from app.workflow_contracts import ProductReference, SourceProduct, WorkflowProviderError
 
-
+# data with examples for running app in sample mode 
 class SampleExtractionProvider:
     async def gate_image(self, *, request_payload: dict[str, Any], image_metadata: list[dict[str, Any]]) -> dict[str, Any]:
         target = request_payload.get("targetDescription")

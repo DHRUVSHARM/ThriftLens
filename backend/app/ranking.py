@@ -1,6 +1,7 @@
 from app.workflow_contracts import ProductReference, RankedProduct, SourceProduct
 
-
+# TODO : this ranking method is deterministiic, simply works on overlap of extracted words and median price comparision logic 
+# will be probably moved into a mcp server withing tool logic and be used as a supplemental method for choices 
 def deterministic_rank(product_reference: ProductReference, products: list[SourceProduct]) -> list[RankedProduct]:
     reference_terms = set(product_reference.title.lower().split())
     ranked: list[RankedProduct] = []
