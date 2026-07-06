@@ -137,7 +137,7 @@ The deployment keeps local Compose as the fallback review path. Render-specific 
 After Render creates the public services, the remaining manual wiring is:
 
 - set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL
-- set `CORS_ALLOWED_ORIGINS` on the backend env group to the public frontend URL
+- keep `CORS_ALLOWED_ORIGINS` in `render.yaml` for the public frontend URL plus local development origins
 - redeploy the web/API services
 - add the verified deployed URL here
 

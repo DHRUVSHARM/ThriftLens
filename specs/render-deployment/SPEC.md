@@ -39,6 +39,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - App storage must create the MinIO bucket idempotently so Render does not need the local `minio-init` service.
 - Worker commands must pin Celery concurrency/prefetch and recycle child processes to keep memory predictable on small instances.
 - README, `.env.example`, and APPROACH notes must describe Render deployment knobs and post-create URL wiring.
+- `CORS_ALLOWED_ORIGINS` should be committed in `render.yaml` once the stable public frontend URL is known, because it is not secret and should not be missed during Blueprint sync.
 
 ## Non-Functional Requirements
 
@@ -65,7 +66,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 
 ## Error Cases
 
-- Missing Render public URLs should be documented as a two-pass setup issue for `NEXT_PUBLIC_API_BASE_URL` and `CORS_ALLOWED_ORIGINS`.
+- Missing Render public API URL should be documented as a two-pass setup issue for `NEXT_PUBLIC_API_BASE_URL`; CORS should include the stable deployed frontend origin plus local development origins in `render.yaml`.
 - Missing provider keys should remain surfaced by the existing health endpoint.
 - MinIO unavailable should keep health returning a failed MinIO check instead of crashing the API process.
 - Render Postgres URL format should not break SQLAlchemy async engine creation.

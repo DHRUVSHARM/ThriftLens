@@ -291,8 +291,8 @@ The Render deployment uses:
 Render setup notes:
 
 1. Create the Blueprint from `render.yaml`.
-2. Fill secret dashboard values for `GEMINI_API_KEY` or `GOOGLE_CLOUD_API_KEY`, `SERPAPI_API_KEY`, and `CORS_ALLOWED_ORIGINS`.
-3. After Render creates public URLs, set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL and `CORS_ALLOWED_ORIGINS` on the backend env group to the public web URL.
+2. Fill secret dashboard values for `GEMINI_API_KEY` or `GOOGLE_CLOUD_API_KEY` and `SERPAPI_API_KEY`.
+3. After Render creates public URLs, set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL. `CORS_ALLOWED_ORIGINS` is committed in `render.yaml` for the deployed web URL plus local development origins.
 4. Redeploy `thriftlens-web` after changing `NEXT_PUBLIC_API_BASE_URL`, because the browser-facing API URL is baked into the Next.js build.
 5. Keep camera capture behind HTTPS; Render public services provide HTTPS by default.
 

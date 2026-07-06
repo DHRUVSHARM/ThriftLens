@@ -4,7 +4,7 @@ envVarGroups:
       - key: PROVIDER_MODE
         value: REAL_MODE
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://thriftlens-web.onrender.com,http://localhost:3000,http://127.0.0.1:3000
       - key: DB_POOL_SIZE
         value: 3
       - key: DB_MAX_OVERFLOW
