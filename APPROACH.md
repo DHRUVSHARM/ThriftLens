@@ -64,6 +64,7 @@ The app shows user-safe uncertainty instead of hiding it.
 - **Ranking:** deterministic scoring remains as fallback, but ranking now includes product profile priorities, mismatch caveats, score breakdowns, and source-grounded explanations.
 - **Persistence:** Postgres is the durable job state source; Redis/Celery handle background execution; MinIO stores temporary uploaded images.
 - **Image retention:** uploaded images are private server-side artifacts retained for the same 21,600-second / 6-hour TTL regardless of whether the image is safe, unsafe, completed, failed, or needs refinement. Celery Beat schedules cleanup so expired MinIO objects and metadata are physically removed without mixing retention policy into graph nodes.
+- **Camera perception layer:** camera capture is implemented as a frontend-only source of image evidence. A captured frame becomes the same validated image `File` as upload, so storage, TTL cleanup, safety screening, extraction, and ranking all stay on the existing production path.
 - **UX:** the product starts with a designed landing/workbench experience rather than a generic dashboard or chat UI. Progress substates make long-running extraction/search/ranking feel observable.
 - **Failure behavior:** no fake live results. Missing sources, provider failures, rate limits, unsafe input, unclear input, and non-product requests become explicit user-facing states.
 

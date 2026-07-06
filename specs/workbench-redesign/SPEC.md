@@ -19,6 +19,7 @@ The UI should support the new backend direction:
 
 - Text-only product research.
 - Image-only product research.
+- Camera-captured image product research.
 - Image plus optional target/focus text.
 - Ambiguity refinement when the image contains multiple products.
 - Safe failure states for unsafe, non-product, rate-limited, and source-unavailable cases.
@@ -48,6 +49,7 @@ If a user uploads a product image or describes a product, the app should feel li
 
 - Use one unified input surface, not visible image/text mode tabs.
 - At least one input is required: image, text, or both.
+- Camera capture produces the same image evidence type as upload and must reuse the existing backend image flow.
 - Optional text should adapt its meaning:
   - without image: describe the product to research
   - with image: describe what to focus on in the image
@@ -74,6 +76,7 @@ The product leads the user through structured states:
 User actions should be bounded:
 
 - Start research.
+- Capture product image from the camera.
 - Add or revise focus text.
 - Retry live search.
 - Open source.
@@ -120,6 +123,30 @@ Do not render raw provider errors, raw model output, secret-bearing URLs, or fak
 - Research stages should feel like an active pipeline, not a spinner.
 - Typography, spacing, and color tokens should be designed deliberately instead of relying on browser/system defaults.
 - Support light and dark themes, with a visible theme toggle.
+
+## Camera Capture Studio
+
+Add camera capture as a frontend-only perception layer.
+
+Requirements:
+
+- Provide `Upload image` and `Use camera` as sibling actions in the unified input.
+- `Use camera` opens a focused capture studio using browser camera APIs.
+- Request camera access only after the user explicitly chooses camera capture.
+- Prefer the environment/rear camera when available.
+- Allow camera switching when the browser exposes multiple video input devices.
+- Capture the current frame to canvas, downscale the longest edge to 1600px, encode as JPEG, and wrap it as a normal `File`.
+- After capture, provide a movable and resizable crop frame before `Use photo`; do not add enhancement, PiP, or image-editing tools beyond cropping.
+- Pass the captured `File` through the same frontend validation and multipart API path as uploaded images.
+- Stop all media tracks when the user closes, retakes, confirms, navigates away, or the component unmounts.
+- If camera access is denied, unavailable, insecure, or unsupported, show a clear fallback message and keep upload available.
+- Add `capture="environment"` to the file input as a mobile native fallback.
+
+Out of scope:
+
+- No new backend endpoint.
+- No separate database field for camera images.
+- No local persistence of captured frames beyond the selected preview URL.
 
 ## Design System Direction
 

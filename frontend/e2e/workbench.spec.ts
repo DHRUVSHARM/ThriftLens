@@ -243,14 +243,100 @@ async function mockJobFlow(page: Page, jobId: string, finalPayload: Record<strin
   await page.route(`**/api/research-jobs/${jobId}`, async (route) => jsonResponse(route, finalPayload));
 }
 
+async function installMockCamera(page: Page) {
+  await page.addInitScript({
+    content: `
+      window.__cameraStopCount = 0;
+      Object.defineProperty(HTMLMediaElement.prototype, "srcObject", {
+        configurable: true,
+        get() {
+          return this.__mockSrcObject || null;
+        },
+        set(value) {
+          this.__mockSrcObject = value;
+        }
+      });
+      Object.defineProperty(HTMLVideoElement.prototype, "videoWidth", {
+        configurable: true,
+        get() {
+          return 640;
+        }
+      });
+      Object.defineProperty(HTMLVideoElement.prototype, "videoHeight", {
+        configurable: true,
+        get() {
+          return 480;
+        }
+      });
+      HTMLMediaElement.prototype.play = async function () {};
+      HTMLCanvasElement.prototype.getContext = function () {
+        return {
+          drawImage() {}
+        };
+      };
+      HTMLCanvasElement.prototype.toBlob = function (callback, type) {
+        callback(new Blob(["camera frame"], { type: type || "image/jpeg" }));
+      };
+      window.createImageBitmap = async () => ({
+        width: 640,
+        height: 480,
+        close() {}
+      });
+      const track = {
+        kind: "video",
+        stop() {
+          window.__cameraStopCount += 1;
+        },
+        getSettings() {
+          return { deviceId: "camera-back" };
+        }
+      };
+      const stream = {
+        getTracks() {
+          return [track];
+        },
+        getVideoTracks() {
+          return [track];
+        }
+      };
+      Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: {
+          getUserMedia: async () => stream,
+          enumerateDevices: async () => [
+            { deviceId: "camera-back", groupId: "group", kind: "videoinput", label: "Back camera" },
+            { deviceId: "camera-front", groupId: "group", kind: "videoinput", label: "Front camera" }
+          ]
+        }
+      });
+    `,
+  });
+}
+
+async function installDeniedCamera(page: Page) {
+  await page.addInitScript({
+    content: `
+      Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: {
+          getUserMedia: async () => {
+            throw new DOMException("Permission denied", "NotAllowedError");
+          },
+          enumerateDevices: async () => []
+        }
+      });
+    `,
+  });
+}
+
 test("renders the unified workbench and has no horizontal mobile overflow", async ({ page }) => {
   await mockHealth(page);
   await page.setViewportSize({ width: 390, height: 820 });
   await page.goto("/");
 
   await expect(page.getByRole("link", { name: "ThriftLens" })).toBeVisible();
-  await expect(page.getByPlaceholder("Describe the product you want to find")).toBeVisible();
-  await expect(page.getByText("Drop or upload image")).toBeVisible();
+  await expect(page.getByPlaceholder(/Describe only the product/)).toBeVisible();
+  await expect(page.getByText("Click to upload image")).toBeVisible();
   await page.getByRole("button", { name: /theme/i }).click();
 
   const hasNoHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -274,7 +360,7 @@ test("submits a text job, polls to complete results, and copies a source-backed 
   await mockJobFlow(page, textJobId, completeJob(textJobId, deskLampBrief), "text");
 
   await page.goto("/");
-  await page.getByPlaceholder("Describe the product you want to find").fill("minimal black desk lamp with wireless charging");
+  await page.getByPlaceholder(/Describe only the product/).fill("minimal black desk lamp with wireless charging");
   await page.getByRole("button", { name: "Start research" }).click();
 
   await expect(page.getByText("Preparing research").first()).toBeVisible();
@@ -304,7 +390,7 @@ test("shows only the current substate while source research is running", async (
   await page.route(`**/api/research-jobs/${jobId}`, async (route) => jsonResponse(route, researchingJob(jobId)));
 
   await page.goto("/");
-  await page.getByPlaceholder("Describe the product you want to find").fill("minimal black desk lamp with wireless charging");
+  await page.getByPlaceholder(/Describe only the product/).fill("minimal black desk lamp with wireless charging");
   await page.getByRole("button", { name: "Start research" }).click();
 
   const progress = page.getByLabel("Research progress");
@@ -337,12 +423,60 @@ test("validates image input and submits an image job", async ({ page }) => {
     buffer: Buffer.from("fake png bytes"),
   });
   await expect(page.getByText("bottle.png")).toBeVisible();
-  await page.getByPlaceholder("What should ThriftLens focus on in this image?").fill("the silver bottle in the center");
+  await page.getByPlaceholder(/Focus this image/).fill("the silver bottle in the center");
   await page.getByRole("button", { name: "Start research" }).click();
 
   await expect(page.getByText("stainless steel insulated water bottle")).toBeVisible({ timeout: 7_000 });
   await expect(page.getByRole("heading", { name: "Insulated Steel Bottle", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("article").getByText("$31.00", { exact: true })).toBeVisible();
+});
+
+test("captures a camera photo and submits through the image job flow", async ({ page }) => {
+  await mockHealth(page);
+  await installMockCamera(page);
+  await mockJobFlow(page, imageJobId, completeJob(imageJobId, bottleBrief), "image");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Use camera" }).click();
+  await expect(page.getByRole("dialog", { name: "Camera capture" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Capture photo" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Capture photo" }).click();
+  await expect(page.getByAltText("Captured product preview")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Crop frame" })).toBeVisible();
+  const resizeHandle = page.getByRole("button", { name: "Resize crop" });
+  const resizeBox = await resizeHandle.boundingBox();
+  expect(resizeBox).not.toBeNull();
+  if (resizeBox) {
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(resizeBox.x - 80, resizeBox.y - 60);
+    await page.mouse.up();
+  }
+  await page.getByRole("button", { name: "Use photo" }).click();
+
+  await expect(page.getByText(/thriftlens-capture-.*-crop\.jpg/)).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Camera capture" })).toHaveCount(0);
+  await page.getByPlaceholder(/Focus this image/).fill("the bottle on the desk");
+  await page.getByRole("button", { name: "Start research" }).click();
+
+  await expect(page.getByText("stainless steel insulated water bottle")).toBeVisible({ timeout: 7_000 });
+  const stopCount = await page.evaluate(() => Number((window as unknown as { __cameraStopCount?: number }).__cameraStopCount || 0));
+  expect(stopCount).toBeGreaterThan(0);
+});
+
+test("shows upload fallback when camera permission is denied", async ({ page }) => {
+  await mockHealth(page);
+  await installDeniedCamera(page);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Use camera" }).click();
+
+  await expect(page.getByRole("dialog", { name: "Camera capture" })).toBeVisible();
+  await expect(page.getByText("Camera permission was denied. Allow camera access or upload an image instead.")).toBeVisible();
+  await page.getByRole("button", { name: "Upload instead" }).click();
+  await expect(page.getByRole("dialog", { name: "Camera capture" })).toHaveCount(0);
+  await expect(page.getByText("Click to upload image")).toBeVisible();
 });
 
 test("renders research unavailable partial state without fake product cards", async ({ page }) => {
@@ -367,7 +501,7 @@ test("renders research unavailable partial state without fake product cards", as
   );
 
   await page.goto("/");
-  await page.getByPlaceholder("Describe the product you want to find").fill("minimal black desk lamp with wireless charging");
+  await page.getByPlaceholder(/Describe only the product/).fill("minimal black desk lamp with wireless charging");
   await page.getByRole("button", { name: "Start research" }).click();
 
   await expect(page.getByText("Research sources are unavailable", { exact: true })).toBeVisible({ timeout: 7_000 });
@@ -380,7 +514,7 @@ test("separates possible matches when no verified match exists", async ({ page }
   await mockJobFlow(page, possibleJobId, completeJob(possibleJobId, possibleOnlyBrief), "text");
 
   await page.goto("/");
-  await page.getByPlaceholder("Describe the product you want to find").fill("no verified black desk lamp");
+  await page.getByPlaceholder(/Describe only the product/).fill("no verified black desk lamp");
   await page.getByRole("button", { name: "Start research" }).click();
 
   await expect(page.getByRole("heading", { name: "Best available match" })).toBeVisible({ timeout: 7_000 });

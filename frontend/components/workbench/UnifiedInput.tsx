@@ -1,6 +1,10 @@
-import { FileImage, Loader2, Search, X } from "lucide-react";
-import type { FormEvent } from "react";
+"use client";
 
+import { Camera, FileImage, Loader2, Search, Upload, X } from "lucide-react";
+import type { FormEvent } from "react";
+import { useRef, useState } from "react";
+
+import { CameraCaptureDialog } from "./CameraCaptureDialog";
 import { Button, FieldLabel, Panel } from "./ui";
 
 type UnifiedInputProps = {
@@ -66,6 +70,9 @@ function ImageSlot({
   imagePreviewUrl: string | null;
   onImage: (file: File | null) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+
   return (
     <div className="grid gap-2">
       <FieldLabel>Image optional</FieldLabel>
@@ -78,19 +85,31 @@ function ImageSlot({
         ) : (
           <>
             <FileImage size={34} className="text-[var(--text-muted)]" aria-hidden="true" />
-            <span className="mt-3 text-sm font-semibold text-[var(--text-primary)]">Drop or upload image</span>
+            <span className="mt-3 text-sm font-semibold text-[var(--text-primary)]">Click to upload image</span>
             <span className="mt-1 text-xs text-[var(--text-muted)]">JPEG, PNG, WebP up to 8MB</span>
           </>
         )}
       </label>
       <input
+        ref={inputRef}
         id="product-image"
         className="sr-only"
         accept="image/jpeg,image/png,image/webp"
+        capture="environment"
         suppressHydrationWarning
         type="file"
         onChange={(event) => onImage(event.target.files?.[0] || null)}
       />
+      <div className="grid gap-2">
+        <Button className="w-full" type="button" variant="secondary" onClick={() => inputRef.current?.click()}>
+          <Upload size={16} aria-hidden="true" />
+          Upload image
+        </Button>
+        <Button className="w-full" type="button" variant="secondary" onClick={() => setIsCameraOpen(true)}>
+          <Camera size={16} aria-hidden="true" />
+          Use camera
+        </Button>
+      </div>
       {imageFile ? (
         <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg bg-[var(--surface-subtle)] px-3 py-2 text-sm text-[var(--text-secondary)]">
           <span className="truncate">{imageFile.name}</span>
@@ -105,6 +124,7 @@ function ImageSlot({
           </button>
         </div>
       ) : null}
+      <CameraCaptureDialog open={isCameraOpen} onClose={() => setIsCameraOpen(false)} onCapture={onImage} />
     </div>
   );
 }

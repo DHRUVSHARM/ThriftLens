@@ -98,6 +98,12 @@ img {
   max-width: 100%;
 }
 
+.camera-preview-video::-webkit-media-controls,
+.camera-preview-video::-webkit-media-controls-enclosure,
+.camera-preview-video::-webkit-media-controls-panel {
+  display: none !important;
+}
+
 section[id] {
   scroll-margin-top: 24px;
 }
