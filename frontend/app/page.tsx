@@ -236,10 +236,10 @@ function LandingIntro() {
             <a className="text-sm font-semibold text-[var(--hero-text-primary)]" href="#workbench">
               ThriftLens
             </a>
-            <nav className="hidden items-center gap-6 text-sm text-[var(--hero-text-secondary)] md:flex" aria-label="Landing navigation">
-              <a className="hover:text-[var(--hero-text-primary)]" href="#archive">Evidence</a>
-              <a className="hover:text-[var(--hero-text-primary)]" href="#process">Workflow</a>
-              <a className="hover:text-[var(--hero-text-primary)]" href="#workbench">Try it</a>
+            <nav className="hidden items-center gap-6 text-sm font-bold text-[var(--nav-text)] md:flex" aria-label="Landing navigation">
+              <a className="hover:opacity-72" href="#archive">About</a>
+              <a className="hover:opacity-72" href="#process">How it works</a>
+              <a className="hover:opacity-72" href="#workbench">Try it</a>
             </nav>
             <div className="flex items-center gap-2">
               <ThemeToggle />
