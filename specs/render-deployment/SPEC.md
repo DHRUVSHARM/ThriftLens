@@ -32,6 +32,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
   - Render Postgres database
 - Frontend Docker image must build and run production Next.js instead of `next dev`.
 - Backend web startup must support Render's runtime `PORT`.
+- MinIO must run from a repo-owned Dockerfile so Render uses a predictable container `CMD`.
 - Runtime config must support explicit local URLs and Render private host/port derivation for MCP services and MinIO.
 - Database config must accept Render's `postgresql://` connection string and convert it to SQLAlchemy's asyncpg URL.
 - App storage must create the MinIO bucket idempotently so Render does not need the local `minio-init` service.

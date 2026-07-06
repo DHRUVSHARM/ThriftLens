@@ -132,7 +132,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
 
         self.assertIn("type: pserv", blueprint)
         self.assertIn("type: keyvalue", blueprint)
-        self.assertIn("runtime: image", blueprint)
+        self.assertIn("dockerfilePath: ./infra/minio/Dockerfile", blueprint)
         self.assertIn("mountPath: /data", blueprint)
         self.assertIn("NEXT_PUBLIC_API_BASE_URL", blueprint)
         self.assertIn("CORS_ALLOWED_ORIGINS", blueprint)

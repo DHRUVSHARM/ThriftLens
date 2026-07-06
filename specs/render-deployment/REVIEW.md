@@ -7,6 +7,7 @@ The implementation matches the Render deployment spec:
 - Added `render.yaml` with public web/API services, private MCP services, worker/beat, private MinIO, Render Key Value, and Render Postgres.
 - Made the frontend Docker image build and run production Next.js.
 - Made the backend Docker image honor runtime `PORT`.
+- Added a repo-owned MinIO Dockerfile to avoid Render image-command parsing ambiguity.
 - Added Render host/port derivation for MCP services and MinIO while preserving explicit local URLs.
 - Normalized Render Postgres `postgresql://` URLs to `postgresql+asyncpg://` for SQLAlchemy async engine creation.
 - Added idempotent MinIO bucket creation in the app storage boundary.

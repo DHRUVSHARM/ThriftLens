@@ -110,7 +110,6 @@ services:
     plan: starter
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
-    dockerCommand: sh -c 'npm run start -- --port ${PORT:-3000}'
     envVars:
       - key: NEXT_PUBLIC_API_BASE_URL
         sync: false
@@ -122,7 +121,6 @@ services:
     plan: starter
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    dockerCommand: sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'
     healthCheckPath: /api/health
     envVars:
       - fromGroup: thriftlens-backend-common
@@ -351,12 +349,11 @@ services:
 
   - type: pserv
     name: thriftlens-minio
-    runtime: image
+    runtime: docker
     region: oregon
     plan: starter
-    image:
-      url: docker.io/minio/minio:latest
-    dockerCommand: server /data --address :9000
+    dockerfilePath: ./infra/minio/Dockerfile
+    dockerContext: ./infra/minio
     envVars:
       - key: PORT
         value: 9000
