@@ -18,6 +18,33 @@ import type { JobStatus, ResearchJob, ResearchPreferences } from "@/lib/types";
 const TERMINAL_STATUSES = new Set<JobStatus>(["complete", "partial", "failed", "expired", "needs_refinement"]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const CAROUSEL_INTERVAL_MS = 4000;
+const CAROUSEL_TRANSITION_MS = 1100;
+
+const archiveSlides = [
+  {
+    title: "Marketplace clues",
+    text: "Bring a messy product clue from a listing, shelf, or screenshot. ThriftLens turns the visible evidence into a structured product reference before search.",
+    images: [
+      { src: "/assets/landing/marketplace_clothes.avif", alt: "Marketplace clothing product evidence" },
+      { src: "/assets/landing/marketplace_items.avif", alt: "Marketplace product items" },
+      { src: "/assets/landing/marketplace_fruits.avif", alt: "Marketplace produce product evidence" },
+    ],
+  },
+  {
+    title: "Capture the product",
+    text: "Upload an image or use the camera, crop the product, and add a focus note when the scene has more than one possible item.",
+    images: [{ src: "/assets/landing/takeitemphoto.avif", alt: "Taking a product photo for research" }],
+  },
+  {
+    title: "Shop with context",
+    text: "Compare source-backed matches with prices, alternatives, caveats, and the ranking basis instead of scrolling through raw links.",
+    images: [
+      { src: "/assets/landing/shopping1.avif", alt: "Shopping comparison screen" },
+      { src: "/assets/landing/shopping2.avif", alt: "Shopping product research" },
+    ],
+  },
+];
 
 export default function Home() {
   const [text, setText] = useState("");
@@ -210,8 +237,8 @@ function LandingIntro() {
               ThriftLens
             </a>
             <nav className="hidden items-center gap-6 text-sm text-[var(--hero-text-secondary)] md:flex" aria-label="Landing navigation">
-              <a className="hover:text-[var(--hero-text-primary)]" href="#archive">Research paths</a>
-              <a className="hover:text-[var(--hero-text-primary)]" href="#process">How it works</a>
+              <a className="hover:text-[var(--hero-text-primary)]" href="#archive">Evidence</a>
+              <a className="hover:text-[var(--hero-text-primary)]" href="#process">Workflow</a>
               <a className="hover:text-[var(--hero-text-primary)]" href="#workbench">Try it</a>
             </nav>
             <div className="flex items-center gap-2">
@@ -223,15 +250,15 @@ function LandingIntro() {
           </header>
 
           <div className="max-w-2xl pb-10">
-            <h1 className="text-6xl font-semibold leading-[0.96] tracking-normal text-[var(--hero-text-primary)] md:text-7xl">
-              Research the product behind an image.
+            <h1 className="text-5xl font-semibold leading-[0.96] tracking-normal text-[var(--hero-text-primary)] sm:text-6xl md:text-7xl">
+              Product research at your fingertips.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-[var(--hero-text-secondary)]">
-              Upload a photo, screenshot, or rough description. ThriftLens extracts a product reference, decides how people shop for that item, searches live sources, and explains why each match was ranked.
+              Start with a camera photo, uploaded image, or product description. ThriftLens screens the evidence, searches live sources, and explains the product-aware ranking behind every match.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--accent)] bg-[var(--accent)] px-4 text-[13px] font-semibold leading-5 text-[var(--accent-contrast)]" href="#workbench">
-                Try product research
+                Start researching
                 <ArrowRight size={16} aria-hidden="true" />
               </a>
               <a className="inline-flex h-10 items-center rounded-md border border-[color-mix(in_srgb,var(--hero-text-primary)_24%,transparent)] px-4 text-[13px] font-semibold text-[var(--hero-text-primary)] hover:border-[color-mix(in_srgb,var(--hero-text-primary)_48%,transparent)]" href="#process">
@@ -242,7 +269,7 @@ function LandingIntro() {
         </div>
       </div>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-16 px-4 py-16 md:px-6 lg:px-8">
+      <div className="mx-auto grid w-full max-w-7xl gap-16 px-4 py-14 md:px-6 md:py-16 lg:px-8">
         <HeroArchive />
         <ProcessNarrative />
       </div>
@@ -251,111 +278,212 @@ function LandingIntro() {
 }
 
 function HeroArchive() {
-  const cards = [
-    {
-      title: "From a room photo",
-      meta: "focus the item before searching",
-      src: "/assets/thriftlens-home-card.png",
-      span: "lg:col-span-2",
-    },
-    {
-      title: "From a rough reference",
-      meta: "extract product type and attributes",
-      src: "/assets/thriftlens-gear-card.png",
-      span: "",
-    },
-    {
-      title: "From live alternatives",
-      meta: "rank by evidence, price, and fit",
-      src: "/assets/thriftlens-accessories-card.png",
-      span: "",
-    },
-  ];
+  const carouselSlides = useMemo(() => [archiveSlides[archiveSlides.length - 1], ...archiveSlides, archiveSlides[0]], []);
+  const [slideIndex, setSlideIndex] = useState(1);
+  const [isResetting, setIsResetting] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const activeIndex = carouselIndexFromSlideIndex(slideIndex);
+  const lastCloneIndex = archiveSlides.length + 1;
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const interval = window.setInterval(() => {
+      setIsResetting(false);
+      setSlideIndex((index) => nextTrackIndex(index));
+    }, CAROUSEL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [prefersReducedMotion]);
+
+  useEffect(() => {
+    if (slideIndex !== 0 && slideIndex !== lastCloneIndex) return;
+    const timeout = window.setTimeout(
+      () => {
+        setIsResetting(true);
+        setSlideIndex(slideIndex === 0 ? archiveSlides.length : 1);
+      },
+      prefersReducedMotion ? 0 : CAROUSEL_TRANSITION_MS + 80,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [lastCloneIndex, prefersReducedMotion, slideIndex]);
+
+  useEffect(() => {
+    if (!isResetting) return;
+    const frame = window.requestAnimationFrame(() => setIsResetting(false));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isResetting, slideIndex]);
+
+  function handleSlideTransitionEnd() {
+    if (slideIndex === 0) {
+      setIsResetting(true);
+      setSlideIndex(archiveSlides.length);
+    } else if (slideIndex === archiveSlides.length + 1) {
+      setIsResetting(true);
+      setSlideIndex(1);
+    }
+  }
+
   return (
-    <section id="archive">
+    <section id="archive" className="mx-auto w-full max-w-6xl">
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">Start with the clues you already have.</h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--text-secondary)]">
-            ThriftLens is built for the messy start: a room photo, a screenshot, or a few words. It keeps the original evidence visible, extracts the product facts, and shows the search and ranking basis instead of hiding decisions in a black box.
+            ThriftLens is built for the messy start: marketplace screenshots, camera photos, or a few words. It keeps the evidence visible while it extracts product facts, searches sources, and shows the ranking basis.
           </p>
         </div>
         <a className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-[var(--border)] px-4 text-[13px] font-semibold text-[var(--text-primary)] hover:border-[var(--border-strong)]" href="#workbench">
-          Start with your evidence
+          Try your own product
           <ArrowRight size={16} aria-hidden="true" />
         </a>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((card) => (
+
+      <div aria-label="Evidence carousel" className="w-full">
+        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_68%,transparent)]">
           <div
-            className={`group relative min-h-80 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] ${card.span}`}
-            key={card.title}
+            className="flex w-full will-change-transform"
+            style={{
+              transform: `translateX(-${slideIndex * 100}%)`,
+              transition: prefersReducedMotion || isResetting ? "none" : `transform ${CAROUSEL_TRANSITION_MS}ms cubic-bezier(0.45, 0, 0.2, 1)`,
+            }}
+            onTransitionEnd={handleSlideTransitionEnd}
           >
-            <Image
-              alt={`${card.title} product research example`}
-              className="h-full w-full object-cover"
-              fill
-              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-              src={card.src}
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0_/_0)_36%,rgb(0_0_0_/_0.78)_100%)]" />
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">
-              <div>
-                <p className="text-lg font-semibold text-white">{card.title}</p>
-                <p className="mt-1 text-sm text-[rgb(255_255_255_/_0.72)]">{card.meta}</p>
-              </div>
-              <span className="rounded-md border border-[rgb(255_255_255_/_0.18)] px-2 py-1 text-xs font-medium text-[rgb(255_255_255_/_0.72)]">source-backed</span>
-            </div>
+            {carouselSlides.map((slide, index) => (
+              <article
+                aria-hidden={index !== slideIndex}
+                className="grid min-w-full max-w-full shrink-0 overflow-hidden xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]"
+                key={`${slide.title}-${index}`}
+              >
+                <div className="relative min-h-[240px] overflow-visible bg-black sm:min-h-[300px] md:min-h-[390px] xl:min-h-[520px] xl:overflow-hidden">
+                  <SlideImages images={slide.images} title={slide.title} />
+                </div>
+                <div className="flex min-h-0 min-w-0 flex-col justify-center p-4 sm:p-5 md:p-7 xl:min-h-[520px]">
+                  <div className="min-w-0">
+                    <h3 className="max-w-sm break-words text-2xl font-semibold leading-tight tracking-normal text-[var(--text-primary)] md:text-3xl">{slide.title}</h3>
+                    <p className="mt-3 max-w-md break-words text-sm leading-6 text-[var(--text-secondary)] md:mt-4 md:text-base md:leading-7">{slide.text}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
-        ))}
+        </div>
+        <div className="mt-3 flex justify-center">
+          <div className="flex gap-2" aria-label="Carousel progress">
+            {archiveSlides.map((slide, index) => (
+              <span
+                key={slide.title}
+                aria-current={index === activeIndex ? "true" : undefined}
+                className={`h-2.5 w-2.5 rounded-full border transition ${
+                  index === activeIndex
+                    ? "border-[var(--accent)] bg-[var(--accent)]"
+                    : "border-[var(--border-strong)] bg-transparent"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
+}
+
+function SlideImages({ images, title }: { images: Array<{ src: string; alt: string }>; title: string }) {
+  if (images.length === 1) {
+    return (
+      <CarouselImage image={images[0]} sizes="(min-width: 1024px) 62vw, 100vw" />
+    );
+  }
+
+  if (images.length === 2) {
+    return (
+      <div className="grid min-h-[240px] grid-cols-1 gap-2 p-2 sm:min-h-[300px] md:min-h-[390px] lg:grid-cols-2 xl:h-full xl:min-h-[520px]" data-testid="carousel-media-grid">
+        {images.map((image) => (
+          <div className="relative min-h-[160px] overflow-hidden rounded-md sm:min-h-[220px] md:min-h-[374px] xl:min-h-[504px]" key={image.src}>
+            <CarouselImage image={image} sizes="(min-width: 1280px) 31vw, (min-width: 1024px) 50vw, 100vw" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative grid min-h-[240px] grid-cols-1 gap-2 p-2 sm:min-h-[300px] md:min-h-[390px] lg:grid-cols-2 xl:h-full xl:min-h-[520px]" data-testid="carousel-media-grid">
+      <div className="relative min-h-[180px] overflow-hidden rounded-md sm:min-h-[220px] lg:row-span-2 lg:min-h-[374px] xl:min-h-[504px]" key={images[0].src}>
+        <CarouselImage image={images[0]} sizes="(min-width: 1280px) 40vw, (min-width: 1024px) 50vw, 100vw" />
+      </div>
+      {images.slice(1).map((image) => (
+        <div className="relative min-h-[136px] overflow-hidden rounded-md sm:min-h-[160px] md:min-h-[183px] xl:min-h-[248px]" key={image.src}>
+          <CarouselImage image={image} sizes="(min-width: 1280px) 22vw, (min-width: 1024px) 50vw, 100vw" />
+        </div>
+      ))}
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0_/_0)_56%,rgb(0_0_0_/_0.32)_100%)]" aria-hidden="true" />
+      <p className="sr-only">{title}</p>
+    </div>
+  );
+}
+
+function CarouselImage({ image, sizes }: { image: { src: string; alt: string }; sizes: string }) {
+  return <Image alt={image.alt} className="h-full w-full object-cover" fill sizes={sizes} src={image.src} />;
+}
+
+function carouselIndexFromSlideIndex(slideIndex: number) {
+  return carouselIndexFromTrackIndex(slideIndex);
+}
+
+function carouselIndexFromTrackIndex(trackIndex: number) {
+  return (trackIndex - 1 + archiveSlides.length) % archiveSlides.length;
+}
+
+function nextTrackIndex(trackIndex: number) {
+  return Math.min(trackIndex + 1, archiveSlides.length + 1);
+}
+
+function previousTrackIndex(trackIndex: number) {
+  return Math.max(trackIndex - 1, 0);
 }
 
 function ProcessNarrative() {
   const steps = [
     {
       icon: <Camera size={17} aria-hidden="true" />,
-      title: "Capture product evidence",
-      text: "Start with an image, a description, or both. A focus note helps when the photo contains several possible products.",
+      title: "Capture evidence",
+      text: "Start from text, upload, or camera capture. If the scene is busy, a focus note tells ThriftLens which product to follow.",
     },
     {
       icon: <ShieldCheck size={17} aria-hidden="true" />,
-      title: "Check safety and clarity",
-      text: "The vision gate blocks unsafe inputs and asks for refinement when the image is non-product, crowded, or too ambiguous.",
+      title: "Screen intent and clarity",
+      text: "The input gate checks product-only intent, image safety, and ambiguity before any source search begins.",
     },
     {
       icon: <Sparkles size={17} aria-hidden="true" />,
-      title: "Build the product profile",
-      text: "Extraction turns the evidence into product type, color, material, features, assumptions, and confidence.",
+      title: "Extract the reference",
+      text: "The evidence becomes a structured product reference with type, color, material, features, assumptions, and confidence.",
     },
     {
       icon: <Search size={17} aria-hidden="true" />,
-      title: "Plan source research",
-      text: "Discovery chooses exact-match and alternatives searches from allowed providers, using the product family and shopper priorities.",
+      title: "Profile how shoppers compare",
+      text: "Discovery identifies the product family and the details shoppers care about, then plans bounded exact-match and alternatives searches.",
     },
     {
       icon: <Layers size={17} aria-hidden="true" />,
-      title: "Rank with visible evidence",
-      text: "Ranking combines source data, extracted details, mismatch checks, and optional model judgment into grouped matches.",
+      title: "Search live sources",
+      text: "Only product-shaped source results are normalized into candidates, so generic links do not become product cards.",
     },
     {
       icon: <SlidersHorizontal size={17} aria-hidden="true" />,
-      title: "Show the basis",
-      text: "The brief shows product signals, search strategy, ranking priorities, caveats, prices, and source links.",
+      title: "Rank and explain",
+      text: "Hybrid ranking weighs source data, shopper priorities, extracted details, mismatch checks, caveats, and price context.",
     },
   ];
 
   return (
-    <section id="process" className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-      <div className="lg:sticky lg:top-8">
-        <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">How ThriftLens keeps results grounded.</h2>
-        <p className="mt-4 max-w-xl text-base leading-7 text-[var(--text-secondary)]">
-          The technical shape is part of the product: safety and product gates, structured extraction, product-aware search planning, hybrid ranking, source links, and clear retry or refinement states.
+    <section id="process" className="mx-auto grid w-full max-w-6xl gap-8 xl:grid-cols-[0.85fr_1.15fr] xl:items-start">
+      <div className="min-w-0 xl:sticky xl:top-8">
+        <h2 className="break-words text-3xl font-semibold tracking-normal text-[var(--text-primary)]">How ThriftLens keeps results grounded.</h2>
+        <p className="mt-4 max-w-xl break-words text-base leading-7 text-[var(--text-secondary)]">
+          The workflow is built to avoid guessing: validate the request, understand the product, search bounded live sources, and make each recommendation explainable.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2" data-testid="process-card-grid">
         {steps.map((step, index) => (
           <ProcessStep key={step.title} index={index + 1} {...step} />
         ))}
@@ -364,15 +492,33 @@ function ProcessNarrative() {
   );
 }
 
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    function handleChange(event: MediaQueryListEvent) {
+      setPrefersReducedMotion(event.matches);
+    }
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
 function ProcessStep({ icon, index, title, text }: { icon: ReactNode; index: number; title: string; text: string }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="text-[var(--accent)]">{icon}</div>
-        <span className="text-sm font-medium text-[var(--text-muted)]">{String(index).padStart(2, "0")}</span>
+        <div className="shrink-0 text-[var(--accent)]">{icon}</div>
+        <span className="shrink-0 text-sm font-medium text-[var(--text-muted)]">{String(index).padStart(2, "0")}</span>
       </div>
-      <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{text}</p>
+      <h3 className="break-words text-base font-semibold text-[var(--text-primary)] [overflow-wrap:anywhere]">{title}</h3>
+      <p className="mt-2 break-words text-sm leading-6 text-[var(--text-secondary)] [overflow-wrap:anywhere]">{text}</p>
     </div>
   );
 }

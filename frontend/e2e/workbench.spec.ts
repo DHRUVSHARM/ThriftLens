@@ -335,13 +335,74 @@ test("renders the unified workbench and has no horizontal mobile overflow", asyn
   await page.goto("/");
 
   await expect(page.getByRole("link", { name: "ThriftLens" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Product research at your fingertips." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Marketplace clues" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next evidence slide" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Previous evidence slide" })).toHaveCount(0);
+
+  const mobileLayout = await landingResponsiveColumns(page);
+  expect(mobileLayout.carouselColumns).toBe(1);
+  expect(mobileLayout.carouselMediaColumns).toBe(1);
+  expect(mobileLayout.processColumns).toBe(1);
+  expect(mobileLayout.processCardColumns).toBe(1);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 900, height: 900 });
+  const tabletLayout = await landingResponsiveColumns(page);
+  expect(tabletLayout.carouselColumns).toBe(1);
+  expect(tabletLayout.carouselMediaColumns).toBe(1);
+  expect(tabletLayout.processColumns).toBe(1);
+  expect(tabletLayout.processCardColumns).toBe(1);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 1000, height: 900 });
+  const compactLayout = await landingResponsiveColumns(page);
+  expect(compactLayout.carouselColumns).toBe(1);
+  expect(compactLayout.carouselMediaColumns).toBe(1);
+  expect(compactLayout.processColumns).toBe(1);
+  expect(compactLayout.processCardColumns).toBe(1);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 1320, height: 900 });
+  const desktopLayout = await landingResponsiveColumns(page);
+  expect(desktopLayout.carouselColumns).toBeGreaterThan(1);
+  expect(desktopLayout.carouselMediaColumns).toBeGreaterThan(1);
+  expect(desktopLayout.processColumns).toBeGreaterThan(1);
+  expect(desktopLayout.processCardColumns).toBeGreaterThan(1);
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("link", { name: "Start researching" }).click();
+  await expect(page.locator("#workbench")).toBeInViewport();
   await expect(page.getByPlaceholder(/Describe only the product/)).toBeVisible();
   await expect(page.getByText("Click to upload image")).toBeVisible();
   await page.getByRole("button", { name: /theme/i }).click();
 
+  await expectNoHorizontalOverflow(page);
+});
+
+async function expectNoHorizontalOverflow(page: Page) {
   const hasNoHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(hasNoHorizontalOverflow).toBe(true);
-});
+}
+
+async function landingResponsiveColumns(page: Page) {
+  return page.evaluate(() => {
+    function columnCount(selector: string) {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) return 0;
+      return getComputedStyle(element)
+        .gridTemplateColumns.split(" ")
+        .filter(Boolean).length;
+    }
+
+    return {
+      carouselColumns: columnCount("#archive article[aria-hidden='false']"),
+      carouselMediaColumns: columnCount("[data-testid='carousel-media-grid']"),
+      processColumns: columnCount("#process"),
+      processCardColumns: columnCount("[data-testid='process-card-grid']"),
+    };
+  });
+}
 
 test("submits a text job, polls to complete results, and copies a source-backed summary", async ({ page }) => {
   await mockHealth(page);
