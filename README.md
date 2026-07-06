@@ -7,6 +7,7 @@ ThriftLens is being built as a Docker Compose app with:
 - `frontend`: Next.js product workbench
 - `api`: FastAPI Job Gateway
 - `worker`: Celery worker
+- `beat`: Celery Beat scheduler for periodic maintenance tasks
 - `extraction-mcp`: FastMCP product extraction service
 - `discovery-mcp`: FastMCP product discovery service for profile/search planning and SerpAPI-backed source discovery
 - `ranking-mcp`: FastMCP product ranking service for score breakdowns, mismatch caveats, grouping, and explanations
@@ -54,7 +55,10 @@ Key environment variables, safe placeholders, and paid-key source notes are docu
 - `RANKING_MCP_URL`: internal URL for the product ranking MCP service
 - `GEMINI_RANKING_ENABLED` and `GEMINI_RANKING_MODEL`: optional model overlay for semantic ranking/explanations; deterministic ranking remains the fallback
 - `DATABASE_URL`, `REDIS_URL`, and MinIO settings: runtime infrastructure
+- `IMAGE_RETENTION_SECONDS`, `IMAGE_CLEANUP_BATCH_SIZE`, and `IMAGE_CLEANUP_INTERVAL_SECONDS`: private uploaded-image retention and cleanup schedule
 - `LIVE_PROVIDER_SMOKE`: opt-in live provider smoke tests
+
+Uploaded images are stored privately in MinIO for a bounded retention window, defaulting to 21,600 seconds, or 6 hours. Celery Beat schedules `cleanup_expired_images`, which removes expired MinIO objects and their `uploaded_images` metadata rows. Unsafe images follow the same TTL policy as normal images; they are not sent to downstream research once blocked. For local cleanup smoke tests, temporarily set `IMAGE_RETENTION_SECONDS` to a short value such as `72`.
 
 Do not commit real secrets in `.env`.
 

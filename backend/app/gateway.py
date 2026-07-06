@@ -242,6 +242,7 @@ async def create_gateway_job(
                 content_type=stored_image.content_type,
                 size_bytes=stored_image.size_bytes,
                 checksum=stored_image.checksum,
+                retention_seconds=settings.image_retention_seconds,
             )
     except Exception as exc:
         raise HTTPException(

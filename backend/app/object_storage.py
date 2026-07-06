@@ -50,3 +50,9 @@ def download_research_image(object_key: str) -> bytes:
     finally:
         response.close()
         response.release_conn()
+
+
+def delete_research_image(object_key: str) -> None:
+    settings = get_settings()
+    client = create_minio_client()
+    client.remove_object(settings.minio_bucket, object_key)

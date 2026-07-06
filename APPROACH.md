@@ -1,90 +1,134 @@
-# Approach Notes
+# APPROACH.md
 
-This is a working document. Keep notes concise while the product is being defined and built; finalize the prose before submission.
+## What Was Built
 
-## What We Built
+ThriftLens is a deployable AI product research workbench. A user can upload a product image, describe a product in text, or combine an image with a short focus note. The app turns that evidence into a structured product reference, searches source-backed product results, ranks possible matches, and presents price context, alternatives, evidence, and uncertainty in a polished web interface.
 
-- Planned build: ThriftLens, an AI-assisted product research workbench that turns an image or text description into a structured product reference, researches source-backed product matches, and presents price context plus alternatives.
+The core workflow is:
+
+1. Capture product evidence from image and/or text.
+2. Screen the input for unsafe content, prompt-injection intent, non-product requests, and ambiguous image evidence.
+3. Extract a structured `ProductReference`.
+4. Classify what kind of product it is and how people usually shop for it.
+5. Plan and execute bounded source-backed product searches through SerpAPI MCP.
+6. Normalize only product-shaped source results.
+7. Rank candidates with deterministic signals plus optional model-assisted reasoning.
+8. Show best available matches, grouped alternatives, caveats, source links, and price context.
+
+## Who It Is For
+
+The target user is someone who sees or imagines a product but does not know exactly what it is, what it should cost, or what similar options exist. The first useful slice is everyday consumer product research: clothing, bags, furniture, home goods, electronics, and similar standard retail products.
 
 ## Why This Problem
 
-- Selected direction: build a deployable AI mini-app for a small problem from the author's own life.
-- Selection criteria: prefer a real personal pain point or admired feature where AI is a core lever, especially when the workflow requires contextual decision-making, condition-specific logic, and natural or messy input data.
+This matched README option 2: a deployable mini-app where AI does meaningful work in the core feature. The problem is small enough to ship, but messy enough that a fixed form or simple keyword search is not enough. Images, vague descriptions, crowded scenes, product ambiguity, and source noise all benefit from AI perception and reasoning, as long as the system keeps the model bounded and grounded.
 
-## Key Decisions and Tradeoffs
+The product hook is: "Show ThriftLens a product, or describe the product you mean, and get source-backed matches without guessing."
 
-- Use spec-driven development: Spec Architect defines `/specs`, Software Engineer implements from approved specs, Review Agent checks compliance.
-- Treat AI as a bounded product component, not a generic chat sidebar.
-- Favor reliable, inspectable AI behavior: structured outputs, validation, explicit uncertainty, editable results, and clear failure states.
-- Optimize for one polished end-to-end flow over breadth.
+## Hardest Part
 
-## What We Intentionally Left Out
+The hardest part was not calling a vision model. The hard part was making the result trustworthy:
 
-- Generated reference images, accounts/saved history, price alerts, browser extension flows, checkout, long-term marketplace ingestion, and full structured editing for every product-reference field.
-- Default bias: cut features that do not improve usefulness, reliability, or demo clarity.
+- distinguish product evidence from user instructions
+- avoid prompt-injection and unsafe category leakage
+- avoid guessing when an image is ambiguous
+- prevent generic web links from being rendered as products
+- keep source-backed facts separate from model assumptions
+- make ranking explainable without overclaiming exact matches
+- handle live provider failures without fake results or endless polling
+
+This became the main architecture driver.
+
+## Where AI Matters
+
+AI is used as a bounded component inside the product workflow, not as a chat sidebar.
+
+- Gemini screens image safety and product suitability.
+- Gemini/text safety classifies text intent in `REAL_MODE` with deterministic policy fallback.
+- Gemini extracts structured product references from image/text.
+- Product discovery uses model-assisted product profiling: product family, shopper priorities, important details, and search strategy.
+- Search planning selects bounded allowed engines and query strategies, while code validates the plan before execution.
+- Ranking uses source-backed candidates with deterministic scoring plus optional model-assisted score/explanation overlays.
+
+The app shows user-safe uncertainty instead of hiding it.
+
+## Key Decisions And Tradeoffs
+
+- **Challenge direction:** chose the AI mini-app path instead of reverse engineering or rebuilding an existing feature.
+- **Architecture:** moved from a fixed workflow pipeline to a LangGraph state machine with modular MCP servers.
+- **MCP boundaries:** split capabilities into Extraction MCP, Discovery MCP, Ranking MCP, plus a shared MCP runtime for tool discovery, allowlisting, timeout/retry policy, circuit breaker wrapping, and redacted logging.
+- **Workflow ownership:** LangGraph owns the stage order and terminal states. Models make bounded judgments inside specific tools.
+- **ReAct tradeoff:** an image product-understanding ReAct loop was tested, but Gemini 3.x tool transcripts hit provider `thought_signature` issues through the LangChain bound-tool path. The production path now uses graph-controlled MCP sequencing for product gate, disambiguation, and extraction. This preserves model-powered perception while avoiding fragile tool-call transcript state.
+- **Safety:** unsafe text/image handling is centralized through product safety policy plus model-assisted classification. Text input must be a product description or an image refinement note; list/rank/browse/buy/source requests are rejected before search.
+- **Research:** SerpAPI hosted MCP is the first live source integration. Results are normalized into `SourceProduct` and must have product-shaped evidence before they appear in the UI.
+- **Ranking:** deterministic scoring remains as fallback, but ranking now includes product profile priorities, mismatch caveats, score breakdowns, and source-grounded explanations.
+- **Persistence:** Postgres is the durable job state source; Redis/Celery handle background execution; MinIO stores temporary uploaded images.
+- **Image retention:** uploaded images are private server-side artifacts retained for the same 21,600-second / 6-hour TTL regardless of whether the image is safe, unsafe, completed, failed, or needs refinement. Celery Beat schedules cleanup so expired MinIO objects and metadata are physically removed without mixing retention policy into graph nodes.
+- **UX:** the product starts with a designed landing/workbench experience rather than a generic dashboard or chat UI. Progress substates make long-running extraction/search/ranking feel observable.
+- **Failure behavior:** no fake live results. Missing sources, provider failures, rate limits, unsafe input, unclear input, and non-product requests become explicit user-facing states.
+
+## What Was Intentionally Left Out
+
+- User accounts and saved history.
+- Price alerts and long-term price tracking.
+- Checkout or affiliate flows.
+- Browser extension/share-sheet capture.
+- Full marketplace ingestion beyond SerpAPI-backed source discovery.
+- Generated reference images as a primary workflow.
+- Manual editing for every extracted product field.
+- Deep retailer-specific verification pages for every result.
+- Full production deployment to AWS; the app is shaped for it but delivered with Docker Compose.
+
+These were cut to keep the take-home focused on one complete, reviewable AI workflow.
 
 ## What Breaks First Under Pressure
 
-- AI latency, provider failures, invalid model output, hallucinations, and missing API keys are expected pressure points.
-- Product scope may break if the workflow expands beyond one clear user job.
+- **Provider quota/latency:** Gemini and SerpAPI rate limits can slow or fail jobs. The app handles this with safe errors, partial states, retries, and circuit breakers, but throughput still depends on provider limits.
+- **Search coverage:** SerpAPI/Google Shopping may not return enough candidates for obscure products or broad descriptions.
+- **Ambiguous evidence:** crowded images and vague text can still require user refinement.
+- **Ranking confidence:** exact-match detection is conservative; the app may show "best available match" instead of claiming an exact match.
+- **Cost:** model-assisted safety, discovery, and ranking improve quality but add cost; routing and fallbacks are important for production.
+- **Infrastructure:** Docker Compose is review-friendly, but real multi-user production would need managed Postgres, object storage, queueing, secrets, observability, and autoscaling.
 
-## What We Would Build Next
+## Current Checkpoint
 
-- User accounts and saved research history.
-- Price tracking, alerts, and change notifications.
-- Browser extension or share-sheet workflow.
-- Additional marketplace/search/retailer adapters behind the research client layer.
-- Richer generated reference images and multi-turn visual refinement.
-- Product comparison collections and broader market research.
+Implemented and manually tested:
 
-## Decision Log
+- Docker Compose stack: frontend, FastAPI API, Celery worker, Postgres, Redis, MinIO, Extraction MCP, Discovery MCP, Ranking MCP.
+- Celery Beat scheduled image cleanup for expired private uploaded-image artifacts.
+- `REAL_MODE` provider path with Gemini and SerpAPI configuration.
+- Text-only product descriptions.
+- Image-only product evidence.
+- Image plus focus note for ambiguous/crowded images.
+- Text prompt-injection and non-product intent gating.
+- Unsafe/regulated product blocking.
+- Image safety and product-likeness gating.
+- Source-backed product discovery and normalization.
+- Grouped result exploration, best available match behavior, caveats, price context, and copyable brief.
+- Partial/failure states for provider/source unavailability.
+- Graph-controlled product understanding for Gemini 3.x after ReAct tool-call transcript issues.
 
-- Initial development process: use spec-driven workflow with explicit Spec Architect, Software Engineer, Acceptance Test Generator, and Review Agent phases.
-- Problem category selected: README option 2, a focused AI mini-app where AI does real work in the core feature.
-- Created a draft PRD at `specs/product-prd/PRD.md` to capture the product/user/problem definition before implementation specs.
-- Current product hypothesis: AI product research app that identifies products from images or text, finds current price context, and suggests similar alternatives with source-backed uncertainty.
-- Product hook refined: support both "I have an image of this product" and "I can describe a product idea; help me create/search for something similar."
-- Guardrail: generated product concepts are search references, not purchasable listings; the app should use them to find similar real products.
-- Architecture direction: use production-shaped orchestration with a graph workflow and MCP-style multi-server tool boundary for vision and research capabilities.
-- Runtime architecture decision: use a FastAPI Job Gateway for intake/load control, Celery with Redis for accepted background research jobs, and UI polling for status/progress.
-- Persistence decision: use Postgres as the durable source of truth for job state, product references, partial briefs, final briefs, and attempt metadata; Redis remains the Celery broker/cache.
-- Resilience decision: keep retries, timeouts, circuit breakers, and provider error normalization in a separate tool execution policy layer around MCP calls.
-- Prompt-injection decision: treat text and image content as untrusted product evidence; enforce safety through extraction prompts, schema validation, fixed workflow transitions, and restricted MCP tools.
-- Gateway decision: use FastAPI for typed validation, upload handling, job creation, polling endpoints, and thin intake control; Docker Compose will absorb the multi-service setup cost.
-- AI provider direction: use Gemini as the single V1 model provider for image extraction, text extraction, and bounded ranking explanations; defer generated reference images to V2.
-- Research source decision: use SerpAPI's hosted MCP server with Google Shopping as the primary V1 source; normalize results into ThriftLens contracts and treat path-auth MCP URLs as secrets.
-- Image handling decision: use MinIO as the V1 S3-compatible temporary object store; store image metadata in Postgres, delete raw images after extraction or TTL, and keep `ProductReference` as the durable artifact.
-- Fallback decision: support real, sample, and test provider modes; sample mode must use deterministic fixtures and visibly label results as sample/static instead of pretending they are live research.
-- UI decision: use a Next.js workbench, not a landing page or chat sidebar; desktop uses two columns for input/reference and results, while mobile stacks the same flow.
-- Implementation planning decision: split the approved technical design into focused implementation specs and require `code-structure-cleanup` after each working feature so service boundaries stay maintainable.
-- First implementation slice: scaffolded Docker Compose runtime with frontend, FastAPI API, Celery worker, Postgres, Redis, and MinIO; default provider mode is sample mode so local setup does not require paid keys.
-- Runtime infrastructure review: API and worker now share one dependency health collector; Compose validation, static runtime tests, and container-internal API/worker health checks passed.
-- Backend gateway slice: added `/api/research-jobs`, polling, retry, text/image validation, MinIO image upload, Postgres metadata persistence, Celery enqueueing, and sample/static completion labeling without live provider calls.
-- Database reliability adjustment: kept SQLAlchemy async connection pooling enabled for production via configurable pool settings; tests use async ASGI clients and worker tasks use a persistent async loop to avoid cross-event-loop asyncpg reuse.
-- Worker orchestration slice: replaced the sample completion shortcut with a bounded workflow that extracts/validates `ProductReference`, records attempts, handles partial research failure, applies deterministic ranking, and builds `ProductResearchBrief`.
-- Provider integration slice: added Gemini and SerpAPI hosted MCP behind isolated provider clients, with schema validation, one repair pass, timeout/retry policy, allowlisted Google Shopping params, source-backed price normalization, and deterministic sample/test modes for reliable local review.
-- Frontend workbench slice: replaced the placeholder with the actual product surface: image/text intake, preferences, polling, reference review, grouped source-backed product cards, sample/static labels, retry, and copy/share.
-- Frontend quality slice: added Playwright browser tests in a separate Docker image so core UI flows are tested without adding browser dependencies to the app container.
-- Final acceptance slice: verified Docker Compose config, running services, API health, frontend HTTP 200, backend tests, host static runtime tests, frontend production build, Playwright e2e, and whitespace hygiene.
-- Live hardening follow-up: real-mode testing exposed Gemini rate limits, MCP response wrapping, and stuck-job risk; drafted provider resilience work for backoff, routing, circuit breakers, input safety, and image+text targeting.
-- Provider resilience Phase 1: moved live provider retry/backoff and error normalization into `ToolExecutionPolicy`, using safe UI-facing error codes so rate limits and provider failures end as explicit job states instead of indefinite polling.
-- Provider resilience Phase 2: added Postgres-backed operation-level circuit breakers and SerpAPI secret redaction so repeated provider failures fail fast without burning quota or exposing path-auth URLs.
-- Provider resilience Phase 3: added an image safety/product-suitability gate and optional target text so ambiguous room/shelf photos ask for refinement instead of guessing or calling source research on the wrong product.
-- Provider resilience Phase 4: split Gemini model routing by fast extraction, quality image extraction, repair, fallback, and ranking explanation; repair stays cheap/isolated while image gate can route accepted difficult images to a stronger extraction model.
-- UI follow-up: current workbench proves the flow, but the next spec moves toward a unified input surface, clearer research pipeline, stronger result hierarchy, and a sleeker product-research interface.
-- Workbench redesign slice: moved from tabbed form/scroll panels to a modular interactive workbench with unified image/text/focus input, theme toggle, research rail, best-match-first result modules, and manual browser review as the UI quality gate.
-- V2 backend decision: replace the fixed workflow pipeline with the final LangGraph + multi-server MCP architecture; keep FastAPI, Celery, Postgres, object storage, polling, safe errors, retries, and circuit breakers where they remain production-correct.
-- V2 MCP runtime slice: centralized multi-server MCP client creation, tool namespacing, allowlisting, policy-wrapped invocation, and secret-redacted connection summaries; SerpAPI now uses this shared runtime.
-- V2 extraction capability slice: introduced a Product Extraction MCP server boundary for image safety, product gating, reference extraction, repair, and target disambiguation so unsafe or ambiguous images are handled before research.
-- V2 graph wiring slice: LangGraph now drives image safety, product gate, extraction, and reference persistence through the extraction MCP runtime before handing the stored reference to the existing research/ranking path.
-- Image safety refinement: split NSFW/unsafe image screening into a dedicated Gemini `ImageSafetyResult` call with user-safe messaging before product suitability gating.
-- Product understanding refinement: after image safety passes, a bounded graph node can use only product gate, target disambiguation, and extraction tools with a hard tool budget, giving multi-product images limited agentic handling without opening the whole workflow.
-- ReAct refinement: product understanding now has an opt-in model-directed tool loop over those same three extraction tools, while sample/test flows keep the deterministic fallback to avoid unnecessary quota use.
-- Product discovery slice: combined the planned context/research servers into a Product Discovery MCP server that classifies the product profile, builds search context, lets the model select a bounded set of allowed SerpAPI engines, executes validated searches in code, and normalizes results to `SourceProduct`.
-- Product ranking slice: added a Ranking MCP server that scores normalized candidates with breakdowns, flags mismatch caveats, groups cheaper/similar/premium alternatives, and writes source-grounded explanations while preserving deterministic fallback.
-- Traceability cleanup: job attempts now carry safe metadata such as candidate counts and fallback markers, and the active worker path builds the v2 graph directly without the old transition runner hook.
-- Input safety hardening: added text safety screening before extraction/search so prompt-injected text, unsafe text, malformed descriptions, and link-style assistant requests stop as safe refinement/failure states instead of becoming source queries.
-- Progress UX refinement: added compact substates inside the research rail and finer graph progress messages so long extraction, source search, and ranking calls feel observable instead of stuck.
-- Working product name: ThriftLens.
-- PRD moved to product-approved draft; next step is technical design for architecture, data contracts, AI workflow, research client, and UI implementation plan.
-- Created first technical design draft at `specs/technical-design/TECHNICAL_DESIGN.md` for architecture, data contracts, AI workflow, reliability, and build phases.
+Recent verification:
+
+- `docker compose exec -T api sh -lc 'PYTHONPATH=/app pytest /app/tests/test_v2_agent_runner.py -q'` passed.
+- `python3 -m py_compile backend/app/agent/product_understanding.py backend/app/agent/graph.py backend/app/worker.py` passed.
+- Manual end-to-end testing covered valid text, broad text, prompt-injection text, malformed text, unsafe/regulatory text, clear image, multi-object image, image plus focus note, source failure behavior, grouped results, theme readability, and mobile overflow.
+
+## What Would Be Built Next
+
+- Saved research history and user accounts.
+- Price tracking and alerts.
+- More retailer/search adapters behind the Discovery MCP server.
+- Stronger source verification for product detail pages.
+- Better product comparison collections.
+- More advanced result filtering and sorting.
+- Optional generated product-reference images for "I can describe it but do not have a photo" workflows.
+- Production deployment with managed Postgres, S3-compatible storage, queue service, secrets manager, OpenTelemetry/CloudWatch logs, and autoscaling worker pools.
+
+## Final Submission Notes To Finish
+
+- Finalize README setup/run/test instructions.
+- Confirm `.env.example` has all variables with safe placeholders.
+- Add walkthrough link to `video.md`.
+- Run final test/build sweep.
+- Run `./submit.sh` after final video and hygiene checks.

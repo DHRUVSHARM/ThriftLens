@@ -21,6 +21,9 @@ ThriftLens uses asynchronous product research jobs. The web gateway must stay re
 - Redis is used for Celery broker/cache behavior, not durable product state.
 - Postgres is the durable source of truth for job status, product references, research briefs, source attempts, and safe errors.
 - MinIO stores temporary uploaded image bytes only.
+- Uploaded image bytes are private server-side artifacts with a default 21,600-second / 6-hour retention TTL.
+- Celery Beat schedules expired-image cleanup; the worker deletes expired MinIO objects and their `uploaded_images` metadata rows.
+- Unsafe/NSFW images follow the same TTL cleanup policy as normal images, but graph safety gates must prevent them from reaching downstream extraction/search/ranking once blocked.
 - Provider mode must be server-side configuration: `REAL_MODE`, `SAMPLE_MODE`, or `TEST_MODE`.
 - Secrets must never be committed, logged, or exposed to the browser.
 
@@ -92,6 +95,7 @@ ThriftLens uses asynchronous product research jobs. The web gateway must stay re
 - Postgres unavailable: API returns service unavailable for job creation/status.
 - Redis unavailable: API returns service unavailable before pretending a job was queued.
 - MinIO unavailable during image upload: job is not accepted and the user sees a recoverable upload/storage error.
+- MinIO unavailable during expired-image cleanup: metadata remains so the next scheduled cleanup can retry.
 - Missing a Gemini-compatible key (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_CLOUD_API_KEY`) or `SERPAPI_API_KEY` in `REAL_MODE`: job is rejected or fails with explicit provider configuration error.
 
 ## Out of Scope

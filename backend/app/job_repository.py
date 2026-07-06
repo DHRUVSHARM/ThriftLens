@@ -111,6 +111,7 @@ async def create_uploaded_image(
     content_type: str,
     size_bytes: int,
     checksum: str,
+    retention_seconds: int = 21600,
 ) -> None:
     async with engine.begin() as connection:
         await connection.execute(
@@ -130,7 +131,7 @@ async def create_uploaded_image(
                     :content_type,
                     :size_bytes,
                     :checksum,
-                    NOW() + INTERVAL '2 hours'
+                    NOW() + (:retention_seconds * INTERVAL '1 second')
                 )
                 """
             ),
@@ -140,8 +141,48 @@ async def create_uploaded_image(
                 "content_type": content_type,
                 "size_bytes": size_bytes,
                 "checksum": checksum,
+                "retention_seconds": retention_seconds,
             },
         )
+
+
+async def list_expired_uploaded_images(limit: int) -> list[dict[str, Any]]:
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text(
+                """
+                SELECT id, job_id, object_key, expires_at
+                FROM uploaded_images
+                WHERE expires_at <= NOW()
+                ORDER BY expires_at ASC, id ASC
+                LIMIT :limit
+                """
+            ),
+            {"limit": limit},
+        )
+        return [
+            {
+                "id": str(row._mapping["id"]),
+                "job_id": str(row._mapping["job_id"]),
+                "object_key": row._mapping["object_key"],
+                "expires_at": row._mapping["expires_at"],
+            }
+            for row in result
+        ]
+
+
+async def delete_uploaded_image_metadata(image_id: str) -> bool:
+    async with engine.begin() as connection:
+        result = await connection.execute(
+            text(
+                """
+                DELETE FROM uploaded_images
+                WHERE id = :image_id
+                """
+            ),
+            {"image_id": image_id},
+        )
+        return bool(result.rowcount)
 
 
 async def get_research_job(job_id: str) -> dict[str, Any] | None:

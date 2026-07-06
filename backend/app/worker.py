@@ -6,6 +6,7 @@ from app.agent.runner import run_agent_job
 from app.async_runtime import run_async
 from app.config import get_settings
 from app.health import collect_runtime_health
+from app.image_cleanup import cleanup_expired_uploaded_images
 from app.job_repository import mark_job_failed
 from app.logging_config import configure_secret_redaction_logging
 
@@ -23,12 +24,23 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=300,
     task_soft_time_limit=240,
+    beat_schedule={
+        "cleanup-expired-images": {
+            "task": "cleanup_expired_images",
+            "schedule": settings.image_cleanup_interval_seconds,
+        }
+    },
 )
 
 
 @celery_app.task(name="healthcheck")
 def healthcheck() -> dict:
     return run_async(collect_runtime_health("thriftlens-worker"))
+
+
+@celery_app.task(name="cleanup_expired_images")
+def cleanup_expired_images() -> dict:
+    return run_async(cleanup_expired_uploaded_images(limit=settings.image_cleanup_batch_size))
 
 
 @celery_app.task(name="process_research_job")

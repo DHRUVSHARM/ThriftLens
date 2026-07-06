@@ -68,6 +68,9 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "MAX_ACTIVE_JOBS",
             "MAX_UPLOAD_MB",
             "MAX_TEXT_LENGTH",
+            "IMAGE_RETENTION_SECONDS",
+            "IMAGE_CLEANUP_BATCH_SIZE",
+            "IMAGE_CLEANUP_INTERVAL_SECONDS",
             "LIVE_PROVIDER_SMOKE",
         }
 
@@ -83,6 +86,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "frontend",
             "api",
             "worker",
+            "beat",
             "extraction-mcp",
             "discovery-mcp",
             "ranking-mcp",
@@ -98,6 +102,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("minio_data:", compose)
         self.assertIn("minio-init:", compose)
         self.assertIn("mc mb --ignore-existing", compose)
+        self.assertIn("celery -A app.worker.celery_app beat", compose)
 
     def test_schema_contains_durable_runtime_tables_and_json_artifacts(self) -> None:
         schema = read("backend/app/schema.sql")

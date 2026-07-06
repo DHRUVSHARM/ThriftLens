@@ -50,6 +50,7 @@ The final backend should make MCP and LangGraph first-class architecture boundar
 - After image/text evidence is assembled into a `ProductReference`, the graph must verify that the reference is a searchable consumer product before source discovery starts.
 - Public context enrichment may improve search terms, but it must not override observed image/text facts unless explicitly represented as high-confidence sourced context.
 - Unsafe images must stop before product extraction or source research.
+- Uploaded images, including unsafe images, remain private server-side artifacts until the configured retention TTL expires. Cleanup is a scheduled maintenance concern, not graph-node business logic.
 - Unsafe, prompt-injected, malformed, or non-product text must stop before product extraction or source research.
 - Regulated or dangerous product categories such as firearms, ammunition, suppressors, and explosives must stop before source research even when phrased as ordinary shopping requests.
 - Image-derived product references must be checked for regulated or dangerous categories after extraction and before discovery.

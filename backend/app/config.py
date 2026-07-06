@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     max_active_jobs: int = Field(default=10, ge=1)
     max_upload_mb: int = Field(default=8, ge=1)
     max_text_length: int = Field(default=2000, ge=1)
+    image_retention_seconds: int = Field(default=21600, ge=1)
+    image_cleanup_batch_size: int = Field(default=100, ge=1)
+    image_cleanup_interval_seconds: int = Field(default=900, ge=60)
     live_provider_smoke: bool = False
 
     def require_real_provider_keys(self) -> list[str]:

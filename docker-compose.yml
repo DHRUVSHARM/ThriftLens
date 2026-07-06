@@ -53,6 +53,9 @@ x-backend-env: &backend-env
   MAX_ACTIVE_JOBS: ${MAX_ACTIVE_JOBS:-10}
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
   MAX_TEXT_LENGTH: ${MAX_TEXT_LENGTH:-2000}
+  IMAGE_RETENTION_SECONDS: ${IMAGE_RETENTION_SECONDS:-21600}
+  IMAGE_CLEANUP_BATCH_SIZE: ${IMAGE_CLEANUP_BATCH_SIZE:-100}
+  IMAGE_CLEANUP_INTERVAL_SECONDS: ${IMAGE_CLEANUP_INTERVAL_SECONDS:-900}
   LIVE_PROVIDER_SMOKE: ${LIVE_PROVIDER_SMOKE:-false}
 
 services:
@@ -115,6 +118,18 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+
+  beat:
+    build:
+      context: ./backend
+    command: celery -A app.worker.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
+    environment:
+      <<: *backend-env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
 
   extraction-mcp:
     build:
