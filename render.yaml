@@ -121,7 +121,7 @@ services:
     plan: starter
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    healthCheckPath: /api/health
+    healthCheckPath: /api/live
     envVars:
       - fromGroup: thriftlens-backend-common
       - key: DATABASE_URL

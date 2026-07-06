@@ -29,6 +29,11 @@ app.add_middleware(
 app.include_router(router)
 
 
+@app.get("/api/live")
+async def live() -> dict:
+    return {"service": "thriftlens-api", "status": "ok"}
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return await collect_runtime_health("thriftlens-api")

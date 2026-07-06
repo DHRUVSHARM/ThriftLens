@@ -139,6 +139,8 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("mountPath: /data", blueprint)
         self.assertIn("NEXT_PUBLIC_API_BASE_URL", blueprint)
         self.assertIn("CORS_ALLOWED_ORIGINS", blueprint)
+        self.assertIn("healthCheckPath: /api/live", blueprint)
+        self.assertNotIn("healthCheckPath: /api/health", blueprint)
         self.assertIn("fromDatabase:", blueprint)
         self.assertIn("connectionString", blueprint)
         self.assertIn("--concurrency=1", blueprint)
@@ -185,5 +187,6 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn('"serpapiConfiguration": True', health)
         self.assertIn("missingProviderKeys", health)
 
+        self.assertIn("@app.get(\"/api/live\")", api)
         self.assertIn('collect_runtime_health("thriftlens-api")', api)
         self.assertIn('collect_runtime_health("thriftlens-worker")', worker)

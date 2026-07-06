@@ -12,6 +12,7 @@ The implementation matches the Render deployment spec:
 - Added Render host/port derivation for MCP services and MinIO while preserving explicit local URLs.
 - Normalized Render Postgres `postgresql://` URLs to `postgresql+asyncpg://` for SQLAlchemy async engine creation.
 - Added idempotent MinIO bucket creation in the app storage boundary.
+- Added `/api/live` as the Render health-check target so platform probes do not run the full dependency health check every few seconds.
 - Updated `.env.example`, README, and APPROACH with deployment variables and Render wiring notes.
 
 ## Acceptance Criteria Coverage
@@ -21,6 +22,7 @@ The implementation matches the Render deployment spec:
 - Config derivation: covered by `test_render_deployment_config.py`.
 - MinIO bucket creation: covered by `test_render_deployment_config.py`.
 - Bounded worker concurrency: covered by static deployment checks in `test_runtime_infrastructure_static.py`.
+- Lightweight API liveness: covered by `test_backend_gateway.py` and static `render.yaml` checks.
 - Environment/docs coverage: covered by static env-var documentation test and manual review of README/APPROACH.
 
 ## Identified Gaps
@@ -31,5 +33,5 @@ The implementation matches the Render deployment spec:
 
 ## Improvement Suggestions
 
-- After deployment, smoke test `/api/health`, one text job, one image/camera job, and one image cleanup cycle.
+- After deployment, confirm Render probes `/api/live`, smoke test `/api/health`, one text job, one image/camera job, and one image cleanup cycle.
 - If the app gets real traffic, replace private MinIO with managed S3-compatible object storage and add external log/metrics streaming.

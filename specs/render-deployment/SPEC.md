@@ -38,6 +38,8 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Database config must accept Render's `postgresql://` connection string and convert it to SQLAlchemy's asyncpg URL.
 - App storage must create the MinIO bucket idempotently so Render does not need the local `minio-init` service.
 - Worker commands must pin Celery concurrency/prefetch and recycle child processes to keep memory predictable on small instances.
+- Render's API web-service HTTP health check must use a cheap liveness endpoint (`/api/live`) instead of the full dependency health endpoint.
+- The full runtime health endpoint (`/api/health`) must remain available for the frontend startup check, manual smoke tests, and dependency diagnostics.
 - README, `.env.example`, and APPROACH notes must describe Render deployment knobs and post-create URL wiring.
 - `CORS_ALLOWED_ORIGINS` should be committed in `render.yaml` once the stable public frontend URL is known, because it is not secret and should not be missed during Blueprint sync.
 
@@ -49,6 +51,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Keep local Compose commands working.
 - Prefer queue backpressure over high per-worker parallelism for the Starter deployment.
 - Keep Render private service ports away from private-network restricted ports.
+- Keep platform liveness checks lightweight; deeper Postgres, Redis, MinIO, and provider-key checks should be explicit runtime diagnostics rather than Render's every-few-seconds probe.
 - Do not enable Render Preview Environments because the chosen Hobby workspace does not support them.
 
 ## Acceptance Criteria
@@ -59,6 +62,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Existing MCP clients use the derived endpoint helpers.
 - Database engine uses an asyncpg-compatible URL even when Render provides `postgresql://`.
 - Upload and health paths can ensure the MinIO bucket exists without `minio-init`.
+- API exposes `/api/live` for Render liveness and keeps `/api/health` for full dependency health.
 - Render and Docker Compose worker commands set bounded Celery concurrency and prefetch behavior.
 - `.env.example` documents Render host/port deployment variables with safe placeholders.
 - README and APPROACH include Render deployment guidance.
@@ -69,6 +73,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Missing Render public API URL should be documented as a two-pass setup issue for `NEXT_PUBLIC_API_BASE_URL`; CORS should include the stable deployed frontend origin plus local development origins in `render.yaml`.
 - Missing provider keys should remain surfaced by the existing health endpoint.
 - MinIO unavailable should keep health returning a failed MinIO check instead of crashing the API process.
+- `/api/live` should remain dependency-light so transient Redis/Postgres/MinIO issues do not cause Render to restart an otherwise reachable API process.
 - Render Postgres URL format should not break SQLAlchemy async engine creation.
 
 ## Out Of Scope

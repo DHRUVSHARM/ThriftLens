@@ -174,6 +174,7 @@ Open:
 
 - Frontend: http://localhost:3000
 - API health: http://localhost:8000/api/health
+- API liveness: http://localhost:8000/api/live
 - MinIO console: http://localhost:9001
 
 The checked-in `.env.example` is configured for `REAL_MODE` so reviewers can copy it, add provider keys, and test the live path. For a no-key local demo, set:
@@ -295,6 +296,7 @@ Render setup notes:
 3. After Render creates public URLs, set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL. `CORS_ALLOWED_ORIGINS` is committed in `render.yaml` for the deployed web URL plus local development origins.
 4. Redeploy `thriftlens-web` after changing `NEXT_PUBLIC_API_BASE_URL`, because the browser-facing API URL is baked into the Next.js build.
 5. Keep camera capture behind HTTPS; Render public services provide HTTPS by default.
+6. Render probes `/api/live` for lightweight API liveness; use `/api/health` for full Postgres, Redis, MinIO, and provider-key diagnostics.
 
 Local Docker Compose remains the fallback review path. `minio-init` is still used locally, while deployed services also create the MinIO bucket idempotently from the app storage layer.
 

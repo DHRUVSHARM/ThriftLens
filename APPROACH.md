@@ -134,6 +134,8 @@ Render deployment support has been added through `render.yaml`. The hosted shape
 
 The deployment keeps local Compose as the fallback review path. Render-specific config derives private MCP and MinIO endpoints from service host/port variables, accepts Render's `postgresql://` Postgres URL by converting it for async SQLAlchemy, and creates the MinIO bucket idempotently from the app so deployed MinIO does not need the local `minio-init` container.
 
+Render's platform health check uses `/api/live`, a lightweight API liveness endpoint. The deeper `/api/health` endpoint remains available for the frontend startup check and manual diagnostics because it verifies Postgres, Redis, MinIO, and provider-key configuration.
+
 After Render creates the public services, the remaining manual wiring is:
 
 - set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL

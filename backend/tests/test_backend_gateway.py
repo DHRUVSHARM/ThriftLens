@@ -33,6 +33,14 @@ async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncClient:
 
 
 @pytest.mark.anyio
+async def test_liveness_endpoint_is_lightweight(client: AsyncClient) -> None:
+    response = await client.get("/api/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"service": "thriftlens-api", "status": "ok"}
+
+
+@pytest.mark.anyio
 async def test_browser_preflight_allows_configured_frontend_origin(client: AsyncClient) -> None:
     response = await client.options(
         "/api/research-jobs",
