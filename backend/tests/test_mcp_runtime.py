@@ -2,6 +2,7 @@ import pytest
 
 from app.mcp_runtime.client import MCPRuntime
 from app.mcp_runtime.registry import MCPToolRegistry, namespaced_tool_name
+from app.mcp_runtime.tool_errors import MCP_TOOL_ERROR_KEY, run_mcp_tool
 from app.workflow_contracts import WorkflowProviderError
 
 
@@ -160,3 +161,25 @@ def test_mcp_tool_registry_reports_missing_tool() -> None:
 
     assert exc.value.code == "mcp_tool_missing"
     assert exc.value.retryable is True
+
+
+@pytest.mark.anyio
+async def test_run_mcp_tool_returns_structured_safe_tool_error() -> None:
+    async def failing_call() -> dict:
+        raise WorkflowProviderError("provider_unavailable", "Provider is temporarily unavailable.", retryable=True)
+
+    result = await run_mcp_tool(
+        tool_name="screen_image_safety",
+        dependency="gemini",
+        operation="gemini_image_safety",
+        call=failing_call(),
+    )
+
+    assert result[MCP_TOOL_ERROR_KEY] == {
+        "code": "provider_unavailable",
+        "message": "Provider is temporarily unavailable.",
+        "retryable": True,
+        "dependency": "gemini",
+        "operation": "gemini_image_safety",
+        "originCode": "provider_unavailable",
+    }

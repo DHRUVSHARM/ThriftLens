@@ -5,6 +5,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from app.logging_config import configure_secret_redaction_logging
+from app.mcp_runtime.tool_errors import run_mcp_tool
 from app.mcp_servers.extraction.tools import (
     disambiguate_target_product_tool,
     extract_product_reference_tool,
@@ -13,6 +15,8 @@ from app.mcp_servers.extraction.tools import (
     screen_image_safety_tool,
     screen_text_safety_tool,
 )
+
+configure_secret_redaction_logging()
 
 MCP_SERVER_HOST = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
 MCP_SERVER_PORT = int(os.getenv("MCP_SERVER_PORT", "8001"))
@@ -30,17 +34,32 @@ mcp = FastMCP(
 
 @mcp.tool(name="screen_image_safety")
 async def screen_image_safety(request_payload: dict[str, Any], image_metadata: list[dict[str, Any]]) -> dict[str, Any]:
-    return await screen_image_safety_tool(request_payload=request_payload, image_metadata=image_metadata)
+    return await run_mcp_tool(
+        tool_name="screen_image_safety",
+        dependency="gemini",
+        operation="gemini_image_safety",
+        call=screen_image_safety_tool(request_payload=request_payload, image_metadata=image_metadata),
+    )
 
 
 @mcp.tool(name="screen_text_safety")
 async def screen_text_safety(request_payload: dict[str, Any]) -> dict[str, Any]:
-    return await screen_text_safety_tool(request_payload=request_payload)
+    return await run_mcp_tool(
+        tool_name="screen_text_safety",
+        dependency="gemini",
+        operation="gemini_text_safety",
+        call=screen_text_safety_tool(request_payload=request_payload),
+    )
 
 
 @mcp.tool(name="image_product_gate")
 async def image_product_gate(request_payload: dict[str, Any], image_metadata: list[dict[str, Any]]) -> dict[str, Any]:
-    return await image_product_gate_tool(request_payload=request_payload, image_metadata=image_metadata)
+    return await run_mcp_tool(
+        tool_name="image_product_gate",
+        dependency="gemini",
+        operation="gemini_image_gate",
+        call=image_product_gate_tool(request_payload=request_payload, image_metadata=image_metadata),
+    )
 
 
 @mcp.tool(name="extract_product_reference")
@@ -49,16 +68,26 @@ async def extract_product_reference(
     request_payload: dict[str, Any],
     image_metadata: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    return await extract_product_reference_tool(
-        input_type=input_type,
-        request_payload=request_payload,
-        image_metadata=image_metadata,
+    return await run_mcp_tool(
+        tool_name="extract_product_reference",
+        dependency="gemini",
+        operation="gemini_extraction",
+        call=extract_product_reference_tool(
+            input_type=input_type,
+            request_payload=request_payload,
+            image_metadata=image_metadata,
+        ),
     )
 
 
 @mcp.tool(name="repair_product_reference")
 async def repair_product_reference(raw_output: dict[str, Any]) -> dict[str, Any]:
-    return await repair_product_reference_tool(raw_output=raw_output)
+    return await run_mcp_tool(
+        tool_name="repair_product_reference",
+        dependency="gemini",
+        operation="gemini_repair",
+        call=repair_product_reference_tool(raw_output=raw_output),
+    )
 
 
 @mcp.tool(name="disambiguate_target_product")

@@ -5,6 +5,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from app.logging_config import configure_secret_redaction_logging
+from app.mcp_runtime.tool_errors import run_mcp_tool
 from app.mcp_servers.discovery.tools import (
     build_search_context_tool,
     classify_product_profile_tool,
@@ -13,6 +15,8 @@ from app.mcp_servers.discovery.tools import (
     plan_search_sources_tool,
     verify_source_tool,
 )
+
+configure_secret_redaction_logging()
 
 
 MCP_SERVER_HOST = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
@@ -31,7 +35,12 @@ mcp = FastMCP(
 
 @mcp.tool(name="classify_product_profile")
 async def classify_product_profile(product_reference: dict[str, Any], preferences: dict[str, Any] | None = None) -> dict[str, Any]:
-    return await classify_product_profile_tool(product_reference=product_reference, preferences=preferences)
+    return await run_mcp_tool(
+        tool_name="classify_product_profile",
+        dependency="gemini",
+        operation="discovery_profile_model",
+        call=classify_product_profile_tool(product_reference=product_reference, preferences=preferences),
+    )
 
 
 @mcp.tool(name="build_search_context")
@@ -46,17 +55,27 @@ async def plan_search_sources(
     search_context: dict[str, Any],
     preferences: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return await plan_search_sources_tool(
-        product_reference=product_reference,
-        product_profile=product_profile,
-        search_context=search_context,
-        preferences=preferences,
+    return await run_mcp_tool(
+        tool_name="plan_search_sources",
+        dependency="gemini",
+        operation="discovery_search_plan_model",
+        call=plan_search_sources_tool(
+            product_reference=product_reference,
+            product_profile=product_profile,
+            search_context=search_context,
+            preferences=preferences,
+        ),
     )
 
 
 @mcp.tool(name="execute_search_plan")
 async def execute_search_plan(search_plan: dict[str, Any]) -> dict[str, Any]:
-    return await execute_search_plan_tool(search_plan=search_plan)
+    return await run_mcp_tool(
+        tool_name="execute_search_plan",
+        dependency="serpapi",
+        operation="discovery_search_sources",
+        call=execute_search_plan_tool(search_plan=search_plan),
+    )
 
 
 @mcp.tool(name="normalize_products")

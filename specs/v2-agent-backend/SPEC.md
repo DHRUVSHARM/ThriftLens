@@ -58,6 +58,8 @@ The final backend should make MCP and LangGraph first-class architecture boundar
 - Ranking must be explainable and source-grounded.
 - Ranking model/tool failure must not block completion when deterministic fallback can rank source products.
 - Provider errors must map to safe user-facing states and must not leak secrets, raw provider payloads, or secret-bearing MCP URLs.
+- MCP service transport health and downstream tool/provider outcome must be observed separately. If a downstream provider fails inside a reachable MCP tool, the tool should return a structured safe tool error and the client should re-raise it as a `WorkflowProviderError` after a successful MCP transport response. The MCP server circuit should represent MCP connectivity/protocol failure, not Gemini, SerpAPI, or object-storage failures hidden behind a reachable MCP service.
+- MCP tool/provider failures must be logged with stage/tool, downstream dependency, operation, safe error code, retryability, and exception class where available. Logs must remain redacted and must not include raw provider payloads, images, API keys, or secret-bearing URLs.
 - Discovery normalization must not render generic web links as products. A source candidate needs product-shaped evidence such as a source-backed price, product image, provider product metadata, or shopping-result metadata before it can become a `SourceProduct`.
 - V2 can reuse existing contracts where they remain correct, but final logic should not preserve obsolete V1 paths for compatibility alone.
 
@@ -388,6 +390,8 @@ Existing contracts that should remain app-facing unless a later spec changes the
 - Ranking uses score breakdowns and mismatch flags when available.
 - Ranking server/model failure falls back to deterministic ranking.
 - MCP runtime blocks non-allowlisted tools.
+- Downstream provider failures inside a reachable MCP service preserve their provider/tool error code and do not mark the MCP service itself as unavailable.
+- MCP servers log redacted tool/provider failures with enough context to identify the failing stage, downstream dependency, and operation.
 - Provider failures map to safe user-facing error codes.
 - Secrets and secret-bearing MCP URLs are redacted from logs and trace records.
 - Frontend polling continues to receive supported public statuses and brief shapes.

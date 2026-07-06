@@ -5,12 +5,15 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from app.logging_config import configure_secret_redaction_logging
 from app.mcp_servers.ranking.tools import (
     detect_mismatches_tool,
     explain_match_tool,
     group_candidates_tool,
     score_candidates_tool,
 )
+
+configure_secret_redaction_logging()
 
 
 MCP_SERVER_HOST = os.getenv("MCP_SERVER_HOST", "0.0.0.0")

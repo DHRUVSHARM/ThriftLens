@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from app.config import get_settings
 from app.mcp_runtime.client import MCPRuntime
 from app.mcp_runtime.registry import namespaced_tool_name
+from app.mcp_runtime.tool_errors import raise_if_mcp_tool_error
 from app.tool_policy import ToolExecutionPolicy
 from app.workflow_contracts import (
     ImageGateResult,
@@ -187,10 +188,11 @@ def coerce_mcp_structured_result(result: Any) -> Any:
         return coerce_mcp_structured_result(content)
 
     if isinstance(result, dict):
+        raise_if_mcp_tool_error(result)
         if "structured_content" in result:
-            return result["structured_content"]
+            return coerce_mcp_structured_result(result["structured_content"])
         if "structuredContent" in result:
-            return result["structuredContent"]
+            return coerce_mcp_structured_result(result["structuredContent"])
         if result.get("type") == "text":
             return parse_mcp_json_text(result.get("text"))
         return result
@@ -212,6 +214,8 @@ def parse_mcp_json_text(value: Any) -> Any:
     if not isinstance(value, str) or not value.strip():
         raise WorkflowProviderError("extraction_mcp_invalid_response", "Extraction MCP returned empty text.", retryable=True)
     try:
-        return json.loads(value)
+        parsed = json.loads(value)
+        raise_if_mcp_tool_error(parsed)
+        return parsed
     except json.JSONDecodeError as exc:
         raise WorkflowProviderError("extraction_mcp_invalid_response", "Extraction MCP returned malformed JSON.", retryable=True) from exc

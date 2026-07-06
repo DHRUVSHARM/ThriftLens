@@ -2,6 +2,7 @@ import pytest
 import types
 
 from app.config import Settings
+from app.mcp_runtime.tool_errors import mcp_tool_error_payload
 from app.mcp_servers.discovery.client import DiscoveryMCPToolClient, coerce_mcp_list_result, search_plan_timeout_seconds
 from app.mcp_servers.discovery.tools import (
     _call_gemini_json,
@@ -12,7 +13,14 @@ from app.mcp_servers.discovery.tools import (
     plan_search_sources_tool,
     validate_search_plan,
 )
-from app.workflow_contracts import ProductDiscoveryProfile, ProductReference, ProductSearchContext, ProductSearchPlan, ProductSearchPlanItem
+from app.workflow_contracts import (
+    ProductDiscoveryProfile,
+    ProductReference,
+    ProductSearchContext,
+    ProductSearchPlan,
+    ProductSearchPlanItem,
+    WorkflowProviderError,
+)
 
 
 def test_validate_search_plan_filters_engines_params_and_budget() -> None:
@@ -237,6 +245,22 @@ def test_validate_search_plan_diversifies_duplicate_shopping_alternative_when_pr
 def test_coerce_mcp_list_result_handles_text_wrapped_lists() -> None:
     assert coerce_mcp_list_result({"type": "text", "text": '[{"title": "navy blazer"}]'}) == [{"title": "navy blazer"}]
     assert coerce_mcp_list_result({"structuredContent": [{"title": "navy blazer"}]}) == [{"title": "navy blazer"}]
+
+
+def test_coerce_mcp_list_result_preserves_structured_tool_error() -> None:
+    result = mcp_tool_error_payload(
+        WorkflowProviderError("provider_rate_limited", "Provider is temporarily rate-limited.", retryable=True),
+        dependency="serpapi",
+        operation="discovery_search_sources",
+        origin_code="provider_rate_limited",
+    )
+
+    with pytest.raises(WorkflowProviderError) as exc_info:
+        coerce_mcp_list_result(result)
+
+    assert exc_info.value.code == "provider_rate_limited"
+    assert getattr(exc_info.value, "dependency") == "serpapi"
+    assert getattr(exc_info.value, "operation") == "discovery_search_sources"
 
 
 def test_search_plan_timeout_scales_with_planned_calls_and_retries(monkeypatch: pytest.MonkeyPatch) -> None:

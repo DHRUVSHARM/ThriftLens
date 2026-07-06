@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from app.config import get_settings
 from app.mcp_runtime.client import MCPRuntime
 from app.mcp_runtime.registry import namespaced_tool_name
+from app.mcp_runtime.tool_errors import raise_if_mcp_tool_error
 from app.mcp_servers.extraction.client import coerce_mcp_structured_result
 from app.tool_policy import ToolExecutionPolicy
 from app.workflow_contracts import (
@@ -186,6 +187,8 @@ def coerce_mcp_list_result(result: Any) -> list[Any]:
 
     if isinstance(result, list):
         if all(isinstance(item, dict) and item.get("type") != "text" for item in result):
+            for item in result:
+                raise_if_mcp_tool_error(item)
             return result
         collected: list[Any] = []
         for item in result:
@@ -195,6 +198,7 @@ def coerce_mcp_list_result(result: Any) -> list[Any]:
         return collected
 
     if isinstance(result, dict):
+        raise_if_mcp_tool_error(result)
         if "structured_content" in result:
             return coerce_mcp_list_result(result["structured_content"])
         if "structuredContent" in result:
@@ -205,6 +209,7 @@ def coerce_mcp_list_result(result: Any) -> list[Any]:
 
     if isinstance(result, str) and result.strip():
         parsed = json.loads(result)
+        raise_if_mcp_tool_error(parsed)
         return parsed if isinstance(parsed, list) else [parsed]
 
     return []

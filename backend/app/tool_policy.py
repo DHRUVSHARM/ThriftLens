@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+import logging
 import random
 from typing import TypeVar
 
@@ -17,6 +18,7 @@ from app.workflow_contracts import WorkflowProviderError
 T = TypeVar("T")
 Sleeper = Callable[[float], Awaitable[None]]
 RandomBetween = Callable[[float, float], float]
+logger = logging.getLogger(__name__)
 
 RATE_LIMIT_MARKERS = ("429", "too many requests", "rate limit", "rate_limit", "resource_exhausted", "resource exhausted")
 QUOTA_MARKERS = ("quota exhausted", "quota exceeded", "daily limit", "insufficient quota")
@@ -130,6 +132,14 @@ class ToolExecutionPolicy:
                 return result
             except WorkflowProviderError as exc:
                 last_error = classify_provider_error(exc)
+                log_provider_failure(
+                    dependency=dependency,
+                    operation=operation,
+                    error=last_error,
+                    exception=exc,
+                    attempt=attempt,
+                    max_retries=self.max_retries,
+                )
                 await update_dependency_health(dependency=dependency, state="degraded", failure=True)
                 await self._record_circuit_failure(operation, last_error)
                 if not last_error.retryable or attempt >= self.max_retries:
@@ -141,6 +151,14 @@ class ToolExecutionPolicy:
                     "Provider request timed out.",
                     retryable=True,
                 )
+                log_provider_failure(
+                    dependency=dependency,
+                    operation=operation,
+                    error=last_error,
+                    exception=exc,
+                    attempt=attempt,
+                    max_retries=self.max_retries,
+                )
                 await update_dependency_health(dependency=dependency, state="degraded", failure=True)
                 await self._record_circuit_failure(operation, last_error)
                 if attempt >= self.max_retries:
@@ -148,6 +166,14 @@ class ToolExecutionPolicy:
                 await self._sleep_before_retry(attempt, None)
             except Exception as exc:
                 last_error = classify_provider_exception(exc)
+                log_provider_failure(
+                    dependency=dependency,
+                    operation=operation,
+                    error=last_error,
+                    exception=exc,
+                    attempt=attempt,
+                    max_retries=self.max_retries,
+                )
                 await update_dependency_health(dependency=dependency, state="degraded", failure=True)
                 await self._record_circuit_failure(operation, last_error)
                 if not last_error.retryable or attempt >= self.max_retries:
@@ -183,6 +209,11 @@ class ToolExecutionPolicy:
         cooldown_until = circuit.get("cooldown_until")
         now = datetime.now(timezone.utc)
         if cooldown_until is not None and cooldown_until > now:
+            logger.warning(
+                "Provider circuit open operation=%s cooldown_until=%s",
+                operation,
+                cooldown_until.isoformat(),
+            )
             raise WorkflowProviderError(
                 "provider_circuit_open",
                 "Provider circuit is temporarily open.",
@@ -232,6 +263,27 @@ def classify_provider_error(exc: WorkflowProviderError) -> WorkflowProviderError
             retryable=exc.retryable,
         )
     return exc
+
+
+def log_provider_failure(
+    *,
+    dependency: str,
+    operation: str,
+    error: WorkflowProviderError,
+    exception: Exception,
+    attempt: int,
+    max_retries: int,
+) -> None:
+    logger.warning(
+        "Provider call failed dependency=%s operation=%s code=%s retryable=%s attempt=%s/%s exception_class=%s",
+        dependency,
+        operation,
+        error.code,
+        error.retryable,
+        attempt + 1,
+        max_retries + 1,
+        exception.__class__.__name__,
+    )
 
 
 def classify_provider_exception(exc: Exception) -> WorkflowProviderError:

@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from app.config import Settings
+from app.mcp_runtime.tool_errors import mcp_tool_error_payload
 from app.mcp_servers.extraction.tools import (
     disambiguate_target_product_tool,
     extract_product_reference_tool,
@@ -15,6 +16,7 @@ from app.mcp_servers.extraction.tools import (
 )
 from app.mcp_servers.extraction.client import ExtractionMCPToolClient
 from app.product_safety import text_safety_policy_prompt
+from app.workflow_contracts import WorkflowProviderError
 
 
 class FakeExtractionProvider:
@@ -214,6 +216,30 @@ async def test_extraction_mcp_client_coerces_text_content_result() -> None:
 
     assert result.product_type == "desk lamp"
     assert result.title == "black desk lamp"
+
+
+@pytest.mark.anyio
+async def test_extraction_mcp_client_preserves_structured_tool_error() -> None:
+    runtime = FakeMCPRuntime(
+        mcp_tool_error_payload(
+            WorkflowProviderError("provider_unavailable", "Provider is temporarily unavailable.", retryable=True),
+            dependency="gemini",
+            operation="gemini_image_safety",
+            origin_code="provider_unavailable",
+        )
+    )
+    client = ExtractionMCPToolClient(runtime=runtime)  # type: ignore[arg-type]
+
+    with pytest.raises(WorkflowProviderError) as exc_info:
+        await client.screen_image_safety(
+            request_payload={"inputType": "image"},
+            image_metadata=[{"object_key": "image-key", "content_type": "image/jpeg"}],
+        )
+
+    assert exc_info.value.code == "provider_unavailable"
+    assert exc_info.value.retryable is True
+    assert getattr(exc_info.value, "dependency") == "gemini"
+    assert getattr(exc_info.value, "operation") == "gemini_image_safety"
 
 
 @pytest.mark.anyio
