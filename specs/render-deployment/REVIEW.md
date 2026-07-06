@@ -5,6 +5,7 @@
 The implementation matches the Render deployment spec:
 
 - Added `render.yaml` with public web/API services, private MCP services, worker/beat, private MinIO, Render Key Value, and Render Postgres.
+- Bounded Celery worker concurrency/prefetch in Render and Docker Compose so Starter instances do not spawn the default CPU-count prefork pool.
 - Made the frontend Docker image build and run production Next.js.
 - Made the backend Docker image honor runtime `PORT`.
 - Added a repo-owned MinIO Dockerfile to avoid Render image-command parsing ambiguity.
@@ -19,6 +20,7 @@ The implementation matches the Render deployment spec:
 - Production Dockerfiles: covered by frontend build and backend compile/test commands.
 - Config derivation: covered by `test_render_deployment_config.py`.
 - MinIO bucket creation: covered by `test_render_deployment_config.py`.
+- Bounded worker concurrency: covered by static deployment checks in `test_runtime_infrastructure_static.py`.
 - Environment/docs coverage: covered by static env-var documentation test and manual review of README/APPROACH.
 
 ## Identified Gaps

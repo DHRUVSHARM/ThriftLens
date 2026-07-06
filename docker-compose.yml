@@ -110,7 +110,7 @@ services:
   worker:
     build:
       context: ./backend
-    command: celery -A app.worker.celery_app worker --loglevel=INFO
+    command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=10
     environment:
       <<: *backend-env
     volumes:

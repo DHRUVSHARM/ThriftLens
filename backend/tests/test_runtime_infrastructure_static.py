@@ -111,6 +111,9 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("minio-init:", compose)
         self.assertIn("mc mb --ignore-existing", compose)
         self.assertIn("celery -A app.worker.celery_app beat", compose)
+        self.assertIn("--concurrency=1", compose)
+        self.assertIn("--prefetch-multiplier=1", compose)
+        self.assertIn("--max-tasks-per-child=10", compose)
 
     def test_render_blueprint_defines_deployment_services(self) -> None:
         blueprint = read("render.yaml")
@@ -138,6 +141,9 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("CORS_ALLOWED_ORIGINS", blueprint)
         self.assertIn("fromDatabase:", blueprint)
         self.assertIn("connectionString", blueprint)
+        self.assertIn("--concurrency=1", blueprint)
+        self.assertIn("--prefetch-multiplier=1", blueprint)
+        self.assertIn("--max-tasks-per-child=10", blueprint)
 
     def test_schema_contains_durable_runtime_tables_and_json_artifacts(self) -> None:
         schema = read("backend/app/schema.sql")

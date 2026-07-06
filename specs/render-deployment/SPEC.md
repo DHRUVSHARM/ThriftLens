@@ -15,6 +15,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Only the frontend and API should be public.
 - MCP services and MinIO should be private Render services.
 - The API and worker should continue using Postgres for durable job state and Redis-compatible queueing for Celery.
+- The Celery worker must run with bounded concurrency on Render Starter so the AI/MCP stack does not fan out into the default CPU-count prefork pool.
 - Uploaded images should remain in private S3-compatible storage with the existing TTL cleanup behavior.
 - Local Docker Compose must remain the fallback review path.
 - Real provider secrets must not be committed.
@@ -36,6 +37,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Runtime config must support explicit local URLs and Render private host/port derivation for MCP services and MinIO.
 - Database config must accept Render's `postgresql://` connection string and convert it to SQLAlchemy's asyncpg URL.
 - App storage must create the MinIO bucket idempotently so Render does not need the local `minio-init` service.
+- Worker commands must pin Celery concurrency/prefetch and recycle child processes to keep memory predictable on small instances.
 - README, `.env.example`, and APPROACH notes must describe Render deployment knobs and post-create URL wiring.
 
 ## Non-Functional Requirements
@@ -44,6 +46,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Do not introduce new runtime dependencies.
 - Avoid logging secrets or secret-bearing URLs.
 - Keep local Compose commands working.
+- Prefer queue backpressure over high per-worker parallelism for the Starter deployment.
 - Keep Render private service ports away from private-network restricted ports.
 - Do not enable Render Preview Environments because the chosen Hobby workspace does not support them.
 
@@ -55,6 +58,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Existing MCP clients use the derived endpoint helpers.
 - Database engine uses an asyncpg-compatible URL even when Render provides `postgresql://`.
 - Upload and health paths can ensure the MinIO bucket exists without `minio-init`.
+- Render and Docker Compose worker commands set bounded Celery concurrency and prefetch behavior.
 - `.env.example` documents Render host/port deployment variables with safe placeholders.
 - README and APPROACH include Render deployment guidance.
 - Automated tests cover config derivation and MinIO bucket creation behavior.
