@@ -40,7 +40,7 @@ envVarGroups:
       - key: PROVIDER_TIMEOUT_SECONDS
         value: 20
       - key: PROVIDER_MAX_RETRIES
-        value: 1
+        value: 0
       - key: PROVIDER_BACKOFF_BASE_SECONDS
         value: 2
       - key: PROVIDER_BACKOFF_MAX_SECONDS
@@ -48,11 +48,11 @@ envVarGroups:
       - key: PROVIDER_JITTER_RATIO
         value: 0.25
       - key: CIRCUIT_BREAKER_FAILURE_THRESHOLD
-        value: 3
+        value: 5
       - key: CIRCUIT_BREAKER_WINDOW_SECONDS
         value: 120
       - key: CIRCUIT_BREAKER_COOLDOWN_SECONDS
-        value: 300
+        value: 120
       - key: INPUT_GATE_MIN_PRODUCT_CONFIDENCE
         value: 0.65
       - key: INPUT_GATE_TARGET_MATCH_CONFIDENCE

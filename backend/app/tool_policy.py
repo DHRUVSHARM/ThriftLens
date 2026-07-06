@@ -197,18 +197,12 @@ class ToolExecutionPolicy:
     async def _record_circuit_failure(self, operation: str, error: WorkflowProviderError) -> None:
         if not self.circuit_breaker_enabled or not error.retryable:
             return
-        circuit = await record_dependency_circuit_failure(
+        await record_dependency_circuit_failure(
             operation,
             failure_threshold=self.circuit_failure_threshold,
             window_seconds=self.circuit_window_seconds,
             cooldown_seconds=self.circuit_cooldown_seconds,
         )
-        if circuit["state"] == "open":
-            raise WorkflowProviderError(
-                "provider_circuit_open",
-                "Provider circuit is temporarily open.",
-                retryable=True,
-            )
 
 
 def classify_provider_error(exc: WorkflowProviderError) -> WorkflowProviderError:

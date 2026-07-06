@@ -55,7 +55,8 @@ async def test_postgres_circuit_opens_after_repeated_provider_failures(clean_dep
     with pytest.raises(WorkflowProviderError) as second:
         await policy.run(dependency="serpapi", operation="serpapi_research", call=call)
 
-    assert second.value.code == "provider_circuit_open"
+    assert second.value.code == "provider_unavailable"
+    assert calls == 2
 
     circuit = await get_dependency_health("serpapi_research")
     assert circuit is not None
@@ -63,6 +64,12 @@ async def test_postgres_circuit_opens_after_repeated_provider_failures(clean_dep
     assert circuit["recent_failure_count"] == 2
     assert circuit["opened_at"] is not None
     assert circuit["cooldown_until"] is not None
+
+    with pytest.raises(WorkflowProviderError) as third:
+        await policy.run(dependency="serpapi", operation="serpapi_research", call=call)
+
+    assert third.value.code == "provider_circuit_open"
+    assert calls == 2
 
 
 @pytest.mark.anyio

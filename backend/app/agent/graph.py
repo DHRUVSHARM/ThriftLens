@@ -687,6 +687,13 @@ async def _fallback_ranking_job(
 
 
 async def _record_ranking_fallback(job_id: str, exc: WorkflowProviderError, *, stage: str) -> None:
+    logger.warning(
+        "Ranking fallback for job %s at stage %s with code %s retryable=%s",
+        job_id,
+        stage,
+        exc.code,
+        exc.retryable,
+    )
     await record_job_attempt(
         job_id=job_id,
         stage=stage,
@@ -700,6 +707,13 @@ async def _record_ranking_fallback(job_id: str, exc: WorkflowProviderError, *, s
 
 
 async def _fail_provider_job(job_id: str, exc: WorkflowProviderError, *, stage: str) -> AgentGraphRuntimeState:
+    logger.warning(
+        "Provider failure for job %s at stage %s with code %s retryable=%s",
+        job_id,
+        stage,
+        exc.code,
+        exc.retryable,
+    )
     await record_job_attempt(
         job_id=job_id,
         stage=stage,
@@ -724,6 +738,13 @@ async def _partial_discovery_job(
     *,
     stage: str,
 ) -> AgentGraphRuntimeState:
+    logger.warning(
+        "Discovery partial for job %s at stage %s with code %s retryable=%s",
+        job_id,
+        stage,
+        exc.code,
+        exc.retryable,
+    )
     await record_job_attempt(
         job_id=job_id,
         stage=stage,

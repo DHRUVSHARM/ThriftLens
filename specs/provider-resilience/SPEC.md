@@ -83,7 +83,7 @@ Default retry settings:
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| `PROVIDER_MAX_RETRIES` | `1` | Total attempts = initial call + retries. Use `0` for low-quota live testing. |
+| `PROVIDER_MAX_RETRIES` | `0` | Total attempts = initial call + retries. Keep at `0` for review/live testing to avoid hidden repeated provider calls. |
 | `PROVIDER_BACKOFF_BASE_SECONDS` | `2` | First retry delay before jitter. |
 | `PROVIDER_BACKOFF_MAX_SECONDS` | `15` | Interactive jobs should not wait indefinitely. |
 | `PROVIDER_JITTER_RATIO` | `0.25` | Delay is randomized by +/- 25%. |
@@ -183,9 +183,9 @@ Default circuit breaker settings:
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `3` | Open after 3 classified failures for the same operation. |
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Open after 5 classified failures for the same operation. |
 | `CIRCUIT_BREAKER_WINDOW_SECONDS` | `120` | Count recent failures inside this window. |
-| `CIRCUIT_BREAKER_COOLDOWN_SECONDS` | `300` | Stay open for 5 minutes before half-open probe. |
+| `CIRCUIT_BREAKER_COOLDOWN_SECONDS` | `120` | Stay open for 2 minutes before half-open probe. |
 
 Circuit scope:
 
