@@ -21,6 +21,7 @@ from app.product_safety import (
     text_safety_message_for_reason,
 )
 from app.sample_providers import SampleExtractionProvider
+from app.tool_policy import ToolExecutionPolicy
 from app.workflow_contracts import (
     DetectedProduct,
     ImageGateResult,
@@ -60,10 +61,10 @@ class ExtractionProviderProtocol(Protocol):
         ...
 
 
-def build_extraction_provider() -> ExtractionProviderProtocol:
+def build_extraction_provider(policy: ToolExecutionPolicy | None = None) -> ExtractionProviderProtocol:
     settings = get_settings()
     if settings.provider_mode == "REAL_MODE":
-        return GeminiExtractionProvider()
+        return GeminiExtractionProvider(policy=policy)
     return SampleExtractionProvider()
 
 

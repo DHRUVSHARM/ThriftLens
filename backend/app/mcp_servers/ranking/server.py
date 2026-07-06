@@ -12,6 +12,7 @@ from app.mcp_servers.ranking.tools import (
     group_candidates_tool,
     score_candidates_tool,
 )
+from app.tool_policy import stateless_tool_policy
 
 configure_secret_redaction_logging()
 
@@ -44,6 +45,7 @@ async def score_candidates(
         search_context=search_context,
         source_products=source_products,
         preferences=preferences,
+        policy=stateless_tool_policy(),
     )
 
 
@@ -82,6 +84,7 @@ async def explain_match(
         product_profile=product_profile,
         search_context=search_context,
         ranked_products=ranked_products,
+        policy=stateless_tool_policy(),
     )
 
 

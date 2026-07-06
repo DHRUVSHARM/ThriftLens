@@ -97,6 +97,7 @@ class ToolExecutionPolicy:
         circuit_failure_threshold: int | None = None,
         circuit_window_seconds: int | None = None,
         circuit_cooldown_seconds: int | None = None,
+        record_dependency_health: bool = True,
         sleeper: Sleeper | None = None,
         random_between: RandomBetween | None = None,
     ) -> None:
@@ -106,7 +107,8 @@ class ToolExecutionPolicy:
         self.backoff_base_seconds = backoff_base_seconds or settings.provider_backoff_base_seconds
         self.backoff_max_seconds = backoff_max_seconds or settings.provider_backoff_max_seconds
         self.jitter_ratio = settings.provider_jitter_ratio if jitter_ratio is None else jitter_ratio
-        self.circuit_breaker_enabled = (
+        self.record_dependency_health = record_dependency_health
+        self.circuit_breaker_enabled = record_dependency_health and (
             settings.provider_mode == "REAL_MODE" if circuit_breaker_enabled is None else circuit_breaker_enabled
         )
         self.circuit_failure_threshold = circuit_failure_threshold or settings.circuit_breaker_failure_threshold
@@ -123,11 +125,12 @@ class ToolExecutionPolicy:
         call: Callable[[], Awaitable[T]],
     ) -> T:
         last_error: WorkflowProviderError | None = None
-        await self._raise_if_circuit_open(operation)
+        if self.record_dependency_health:
+            await self._raise_if_circuit_open(operation)
         for attempt in range(self.max_retries + 1):
             try:
                 result = await asyncio.wait_for(call(), timeout=self.timeout_seconds)
-                await update_dependency_health(dependency=dependency, state="healthy")
+                await self._update_dependency_health(dependency=dependency, state="healthy")
                 await self._record_circuit_success(operation)
                 return result
             except WorkflowProviderError as exc:
@@ -140,7 +143,7 @@ class ToolExecutionPolicy:
                     attempt=attempt,
                     max_retries=self.max_retries,
                 )
-                await update_dependency_health(dependency=dependency, state="degraded", failure=True)
+                await self._update_dependency_health(dependency=dependency, state="degraded", failure=True)
                 await self._record_circuit_failure(operation, last_error)
                 if not last_error.retryable or attempt >= self.max_retries:
                     raise last_error from exc
@@ -159,7 +162,7 @@ class ToolExecutionPolicy:
                     attempt=attempt,
                     max_retries=self.max_retries,
                 )
-                await update_dependency_health(dependency=dependency, state="degraded", failure=True)
+                await self._update_dependency_health(dependency=dependency, state="degraded", failure=True)
                 await self._record_circuit_failure(operation, last_error)
                 if attempt >= self.max_retries:
                     raise last_error from exc
@@ -174,7 +177,7 @@ class ToolExecutionPolicy:
                     attempt=attempt,
                     max_retries=self.max_retries,
                 )
-                await update_dependency_health(dependency=dependency, state="degraded", failure=True)
+                await self._update_dependency_health(dependency=dependency, state="degraded", failure=True)
                 await self._record_circuit_failure(operation, last_error)
                 if not last_error.retryable or attempt >= self.max_retries:
                     raise last_error from exc
@@ -202,7 +205,15 @@ class ToolExecutionPolicy:
     async def _raise_if_circuit_open(self, operation: str) -> None:
         if not self.circuit_breaker_enabled:
             return
-        circuit = await get_dependency_health(operation)
+        try:
+            circuit = await get_dependency_health(operation)
+        except Exception as exc:
+            logger.warning(
+                "Provider circuit check skipped operation=%s exception_class=%s",
+                operation,
+                exc.__class__.__name__,
+            )
+            return
         if circuit is None or circuit["state"] != "open":
             return
 
@@ -219,21 +230,55 @@ class ToolExecutionPolicy:
                 "Provider circuit is temporarily open.",
                 retryable=True,
             )
-        await mark_dependency_circuit_half_open(operation)
+        try:
+            await mark_dependency_circuit_half_open(operation)
+        except Exception as exc:
+            logger.warning(
+                "Provider circuit half-open update skipped operation=%s exception_class=%s",
+                operation,
+                exc.__class__.__name__,
+            )
+
+    async def _update_dependency_health(self, *, dependency: str, state: str, failure: bool = False) -> None:
+        if not self.record_dependency_health:
+            return
+        try:
+            await update_dependency_health(dependency=dependency, state=state, failure=failure)
+        except Exception as exc:
+            logger.warning(
+                "Dependency health update skipped dependency=%s state=%s exception_class=%s",
+                dependency,
+                state,
+                exc.__class__.__name__,
+            )
 
     async def _record_circuit_success(self, operation: str) -> None:
-        if self.circuit_breaker_enabled:
-            await record_dependency_circuit_success(operation)
+        if self.record_dependency_health and self.circuit_breaker_enabled:
+            try:
+                await record_dependency_circuit_success(operation)
+            except Exception as exc:
+                logger.warning(
+                    "Provider circuit success update skipped operation=%s exception_class=%s",
+                    operation,
+                    exc.__class__.__name__,
+                )
 
     async def _record_circuit_failure(self, operation: str, error: WorkflowProviderError) -> None:
-        if not self.circuit_breaker_enabled or not error.retryable:
+        if not self.record_dependency_health or not self.circuit_breaker_enabled or not error.retryable:
             return
-        await record_dependency_circuit_failure(
-            operation,
-            failure_threshold=self.circuit_failure_threshold,
-            window_seconds=self.circuit_window_seconds,
-            cooldown_seconds=self.circuit_cooldown_seconds,
-        )
+        try:
+            await record_dependency_circuit_failure(
+                operation,
+                failure_threshold=self.circuit_failure_threshold,
+                window_seconds=self.circuit_window_seconds,
+                cooldown_seconds=self.circuit_cooldown_seconds,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Provider circuit failure update skipped operation=%s exception_class=%s",
+                operation,
+                exc.__class__.__name__,
+            )
 
 
 def classify_provider_error(exc: WorkflowProviderError) -> WorkflowProviderError:
@@ -263,6 +308,14 @@ def classify_provider_error(exc: WorkflowProviderError) -> WorkflowProviderError
             retryable=exc.retryable,
         )
     return exc
+
+
+def stateless_tool_policy(*, timeout_seconds: float | None = None) -> ToolExecutionPolicy:
+    return ToolExecutionPolicy(
+        timeout_seconds=timeout_seconds,
+        circuit_breaker_enabled=False,
+        record_dependency_health=False,
+    )
 
 
 def log_provider_failure(

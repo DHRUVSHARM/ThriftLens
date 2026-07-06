@@ -1,4 +1,5 @@
 import asyncio
+import socket
 
 import pytest
 
@@ -69,6 +70,52 @@ async def test_tool_policy_success_marks_dependency_healthy(health_events: list[
 
     assert result == "ok"
     assert health_events == [{"dependency": "serpapi", "state": "healthy", "failure": False}]
+
+
+@pytest.mark.anyio
+async def test_tool_policy_health_store_dns_failure_does_not_block_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    async def broken_dependency_health(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise socket.gaierror("Name or service not known")
+
+    monkeypatch.setattr(tool_policy_module, "get_dependency_health", broken_dependency_health)
+    monkeypatch.setattr(tool_policy_module, "update_dependency_health", broken_dependency_health)
+    monkeypatch.setattr(tool_policy_module, "record_dependency_circuit_success", broken_dependency_health)
+
+    async def call() -> str:
+        nonlocal calls
+        calls += 1
+        return "ok"
+
+    result = await ToolExecutionPolicy(timeout_seconds=1, max_retries=0, circuit_breaker_enabled=True).run(
+        dependency="gemini",
+        operation="gemini_image_safety",
+        call=call,
+    )
+
+    assert result == "ok"
+    assert calls == 1
+
+
+@pytest.mark.anyio
+async def test_tool_policy_can_skip_dependency_health_persistence(health_events: list[dict[str, object]]) -> None:
+    async def call() -> str:
+        return "ok"
+
+    result = await ToolExecutionPolicy(
+        timeout_seconds=1,
+        max_retries=0,
+        circuit_breaker_enabled=True,
+        record_dependency_health=False,
+    ).run(
+        dependency="gemini",
+        operation="gemini_image_safety",
+        call=call,
+    )
+
+    assert result == "ok"
+    assert health_events == []
 
 
 @pytest.mark.anyio

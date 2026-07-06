@@ -15,6 +15,7 @@ from app.mcp_servers.discovery.tools import (
     plan_search_sources_tool,
     verify_source_tool,
 )
+from app.tool_policy import stateless_tool_policy
 
 configure_secret_redaction_logging()
 
@@ -74,7 +75,7 @@ async def execute_search_plan(search_plan: dict[str, Any]) -> dict[str, Any]:
         tool_name="execute_search_plan",
         dependency="serpapi",
         operation="discovery_search_sources",
-        call=execute_search_plan_tool(search_plan=search_plan),
+        call=execute_search_plan_tool(search_plan=search_plan, policy=stateless_tool_policy()),
     )
 
 
