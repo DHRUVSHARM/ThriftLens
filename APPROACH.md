@@ -91,7 +91,7 @@ These were cut to keep the take-home focused on one complete, reviewable AI work
 - **Cost:** model-assisted safety, discovery, and ranking improve quality but add cost; routing and fallbacks are important for production.
 - **Infrastructure:** Docker Compose is review-friendly, but real multi-user production would need managed Postgres, object storage, queueing, secrets, observability, and autoscaling.
 
-## Current Checkpoint
+## Final Status
 
 Implemented and manually tested:
 
@@ -111,9 +111,35 @@ Implemented and manually tested:
 
 Recent verification:
 
+- `docker compose config --quiet` passed.
+- `docker compose run --rm api python -m pytest tests` passed: 156 passed, 5 skipped.
+- `docker compose run --rm frontend npm run build` passed.
+- `python3 -m compileall -q backend/app` passed.
 - `docker compose exec -T api sh -lc 'PYTHONPATH=/app pytest /app/tests/test_v2_agent_runner.py -q'` passed.
 - `python3 -m py_compile backend/app/agent/product_understanding.py backend/app/agent/graph.py backend/app/worker.py` passed.
 - Manual end-to-end testing covered valid text, broad text, prompt-injection text, malformed text, unsafe/regulatory text, clear image, multi-object image, image plus focus note, source failure behavior, grouped results, theme readability, and mobile overflow.
+
+## Deployment
+
+Local Docker Compose is the primary review path:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Deployment URL: `TBD`
+
+Render deployment support has been added through `render.yaml`. The hosted shape keeps only the frontend and API public, with Celery worker/beat, Extraction MCP, Discovery MCP, Ranking MCP, Render Postgres, Render Key Value, and private MinIO on Render's private network.
+
+The deployment keeps local Compose as the fallback review path. Render-specific config derives private MCP and MinIO endpoints from service host/port variables, accepts Render's `postgresql://` Postgres URL by converting it for async SQLAlchemy, and creates the MinIO bucket idempotently from the app so deployed MinIO does not need the local `minio-init` container.
+
+After Render creates the public services, the remaining manual wiring is:
+
+- set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL
+- set `CORS_ALLOWED_ORIGINS` on the backend env group to the public frontend URL
+- redeploy the web/API services
+- add the verified deployed URL here
 
 ## What Would Be Built Next
 
@@ -125,11 +151,3 @@ Recent verification:
 - More advanced result filtering and sorting.
 - Optional generated product-reference images for "I can describe it but do not have a photo" workflows.
 - Production deployment with managed Postgres, S3-compatible storage, queue service, secrets manager, OpenTelemetry/CloudWatch logs, and autoscaling worker pools.
-
-## Final Submission Notes To Finish
-
-- Finalize README setup/run/test instructions.
-- Confirm `.env.example` has all variables with safe placeholders.
-- Add walkthrough link to `video.md`.
-- Run final test/build sweep.
-- Run `./submit.sh` after final video and hygiene checks.

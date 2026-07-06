@@ -54,12 +54,20 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "PRODUCT_UNDERSTANDING_MODEL",
             "PRODUCT_UNDERSTANDING_MAX_TOOL_CALLS",
             "EXTRACTION_MCP_URL",
+            "EXTRACTION_MCP_HOST",
+            "EXTRACTION_MCP_PORT",
             "DISCOVERY_MCP_URL",
+            "DISCOVERY_MCP_HOST",
+            "DISCOVERY_MCP_PORT",
             "DISCOVERY_MODEL",
             "DISCOVERY_MAX_ENGINES",
             "DISCOVERY_ENGINE_ALLOWLIST",
             "RANKING_MCP_URL",
+            "RANKING_MCP_HOST",
+            "RANKING_MCP_PORT",
             "MINIO_ENDPOINT",
+            "MINIO_HOST",
+            "MINIO_PORT",
             "MINIO_ACCESS_KEY",
             "MINIO_SECRET_KEY",
             "MINIO_BUCKET",
@@ -103,6 +111,33 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("minio-init:", compose)
         self.assertIn("mc mb --ignore-existing", compose)
         self.assertIn("celery -A app.worker.celery_app beat", compose)
+
+    def test_render_blueprint_defines_deployment_services(self) -> None:
+        blueprint = read("render.yaml")
+        required_services = {
+            "thriftlens-web",
+            "thriftlens-api",
+            "thriftlens-worker",
+            "thriftlens-beat",
+            "thriftlens-extraction-mcp",
+            "thriftlens-discovery-mcp",
+            "thriftlens-ranking-mcp",
+            "thriftlens-minio",
+            "thriftlens-redis",
+            "thriftlens-postgres",
+        }
+
+        for service in required_services:
+            self.assertIn(f"name: {service}", blueprint)
+
+        self.assertIn("type: pserv", blueprint)
+        self.assertIn("type: keyvalue", blueprint)
+        self.assertIn("runtime: image", blueprint)
+        self.assertIn("mountPath: /data", blueprint)
+        self.assertIn("NEXT_PUBLIC_API_BASE_URL", blueprint)
+        self.assertIn("CORS_ALLOWED_ORIGINS", blueprint)
+        self.assertIn("fromDatabase:", blueprint)
+        self.assertIn("connectionString", blueprint)
 
     def test_schema_contains_durable_runtime_tables_and_json_artifacts(self) -> None:
         schema = read("backend/app/schema.sql")

@@ -81,7 +81,7 @@ class DiscoveryMCPToolClient:
             connection_config={
                 DISCOVERY_SERVER_NAME: {
                     "transport": "http",
-                    "url": self.settings.discovery_mcp_url,
+                    "url": self.settings.discovery_mcp_endpoint(),
                 }
             },
             allowed_tools=DISCOVERY_ALLOWED_TOOLS,

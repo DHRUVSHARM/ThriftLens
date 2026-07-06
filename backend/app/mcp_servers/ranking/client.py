@@ -77,7 +77,7 @@ class RankingMCPToolClient:
             connection_config={
                 RANKING_SERVER_NAME: {
                     "transport": "http",
-                    "url": self.settings.ranking_mcp_url,
+                    "url": self.settings.ranking_mcp_endpoint(),
                 }
             },
             allowed_tools=RANKING_ALLOWED_TOOLS,

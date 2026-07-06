@@ -1,0 +1,389 @@
+previews:
+  generation: manual
+
+envVarGroups:
+  - name: thriftlens-backend-common
+    envVars:
+      - key: PROVIDER_MODE
+        value: REAL_MODE
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DB_POOL_SIZE
+        value: 3
+      - key: DB_MAX_OVERFLOW
+        value: 2
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      - key: GEMINI_EXTRACTION_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_EXTRACTION_FALLBACK_MODEL
+        value: gemini-3.5-flash
+      - key: GEMINI_EXTRACTION_QUALITY_MODEL
+        value: gemini-3.5-flash
+      - key: GEMINI_TEXT_SAFETY_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_REPAIR_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_RANKING_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_RANKING_ENABLED
+        value: true
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: SERPAPI_MCP_BASE_URL
+        value: https://mcp.serpapi.com
+      - key: SERPAPI_MAX_CALLS_PER_JOB
+        value: 3
+      - key: PROVIDER_TIMEOUT_SECONDS
+        value: 20
+      - key: PROVIDER_MAX_RETRIES
+        value: 1
+      - key: PROVIDER_BACKOFF_BASE_SECONDS
+        value: 2
+      - key: PROVIDER_BACKOFF_MAX_SECONDS
+        value: 15
+      - key: PROVIDER_JITTER_RATIO
+        value: 0.25
+      - key: CIRCUIT_BREAKER_FAILURE_THRESHOLD
+        value: 3
+      - key: CIRCUIT_BREAKER_WINDOW_SECONDS
+        value: 120
+      - key: CIRCUIT_BREAKER_COOLDOWN_SECONDS
+        value: 300
+      - key: INPUT_GATE_MIN_PRODUCT_CONFIDENCE
+        value: 0.65
+      - key: INPUT_GATE_TARGET_MATCH_CONFIDENCE
+        value: 0.70
+      - key: INPUT_GATE_QUALITY_MODEL_CONFIDENCE
+        value: 0.82
+      - key: INPUT_GATE_MAX_PRODUCTS_WITHOUT_TARGET
+        value: 1
+      - key: TEXT_SAFETY_MODEL_ENABLED
+        value: true
+      - key: TEXT_SAFETY_MODEL_SAFE_THRESHOLD
+        value: 0.74
+      - key: TEXT_SAFETY_MODEL_UNSAFE_THRESHOLD
+        value: 0.68
+      - key: PRODUCT_UNDERSTANDING_AGENT_ENABLED
+        value: true
+      - key: PRODUCT_UNDERSTANDING_MODEL
+        value: gemini-3.1-flash-lite
+      - key: PRODUCT_UNDERSTANDING_MAX_TOOL_CALLS
+        value: 3
+      - key: DISCOVERY_MODEL
+        value: gemini-3.1-flash-lite
+      - key: DISCOVERY_MAX_ENGINES
+        value: 3
+      - key: DISCOVERY_ENGINE_ALLOWLIST
+        value: google_shopping,google,bing_shopping,ebay,amazon,walmart,home_depot
+      - key: MINIO_BUCKET
+        value: thriftlens-uploads
+      - key: OBJECT_STORAGE_FORCE_PATH_STYLE
+        value: true
+      - key: OBJECT_STORAGE_SECURE
+        value: false
+      - key: MAX_QUEUED_JOBS
+        value: 50
+      - key: MAX_ACTIVE_JOBS
+        value: 10
+      - key: MAX_UPLOAD_MB
+        value: 8
+      - key: MAX_TEXT_LENGTH
+        value: 2000
+      - key: IMAGE_RETENTION_SECONDS
+        value: 21600
+      - key: IMAGE_CLEANUP_BATCH_SIZE
+        value: 100
+      - key: IMAGE_CLEANUP_INTERVAL_SECONDS
+        value: 900
+      - key: LIVE_PROVIDER_SMOKE
+        value: false
+
+services:
+  - type: web
+    name: thriftlens-web
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    dockerCommand: sh -c 'npm run start -- --port ${PORT:-3000}'
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false
+
+  - type: web
+    name: thriftlens-api
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'
+    healthCheckPath: /api/health
+    envVars:
+      - fromGroup: thriftlens-backend-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: thriftlens-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: thriftlens-redis
+          property: connectionString
+      - key: EXTRACTION_MCP_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-extraction-mcp
+          property: host
+      - key: EXTRACTION_MCP_PORT
+        value: 8001
+      - key: DISCOVERY_MCP_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-discovery-mcp
+          property: host
+      - key: DISCOVERY_MCP_PORT
+        value: 8002
+      - key: RANKING_MCP_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-ranking-mcp
+          property: host
+      - key: RANKING_MCP_PORT
+        value: 8003
+      - key: MINIO_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          property: host
+      - key: MINIO_PORT
+        value: 9000
+      - key: MINIO_ACCESS_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_SECRET_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_PASSWORD
+
+  - type: worker
+    name: thriftlens-worker
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.worker.celery_app worker --loglevel=INFO
+    envVars:
+      - fromGroup: thriftlens-backend-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: thriftlens-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: thriftlens-redis
+          property: connectionString
+      - key: EXTRACTION_MCP_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-extraction-mcp
+          property: host
+      - key: EXTRACTION_MCP_PORT
+        value: 8001
+      - key: DISCOVERY_MCP_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-discovery-mcp
+          property: host
+      - key: DISCOVERY_MCP_PORT
+        value: 8002
+      - key: RANKING_MCP_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-ranking-mcp
+          property: host
+      - key: RANKING_MCP_PORT
+        value: 8003
+      - key: MINIO_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          property: host
+      - key: MINIO_PORT
+        value: 9000
+      - key: MINIO_ACCESS_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_SECRET_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_PASSWORD
+
+  - type: worker
+    name: thriftlens-beat
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.worker.celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
+    envVars:
+      - fromGroup: thriftlens-backend-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: thriftlens-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: thriftlens-redis
+          property: connectionString
+      - key: MINIO_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          property: host
+      - key: MINIO_PORT
+        value: 9000
+      - key: MINIO_ACCESS_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_SECRET_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_PASSWORD
+
+  - type: pserv
+    name: thriftlens-extraction-mcp
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.mcp_servers.extraction.server
+    envVars:
+      - fromGroup: thriftlens-backend-common
+      - key: PORT
+        value: 8001
+      - key: MCP_SERVER_HOST
+        value: 0.0.0.0
+      - key: MCP_SERVER_PORT
+        value: 8001
+      - key: MCP_SERVER_PATH
+        value: /mcp
+      - key: MCP_SERVER_TRANSPORT
+        value: streamable-http
+      - key: MINIO_HOST
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          property: host
+      - key: MINIO_PORT
+        value: 9000
+      - key: MINIO_ACCESS_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_SECRET_KEY
+        fromService:
+          type: pserv
+          name: thriftlens-minio
+          envVarKey: MINIO_ROOT_PASSWORD
+
+  - type: pserv
+    name: thriftlens-discovery-mcp
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.mcp_servers.discovery.server
+    envVars:
+      - fromGroup: thriftlens-backend-common
+      - key: PORT
+        value: 8002
+      - key: MCP_SERVER_HOST
+        value: 0.0.0.0
+      - key: MCP_SERVER_PORT
+        value: 8002
+      - key: MCP_SERVER_PATH
+        value: /mcp
+      - key: MCP_SERVER_TRANSPORT
+        value: streamable-http
+
+  - type: pserv
+    name: thriftlens-ranking-mcp
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.mcp_servers.ranking.server
+    envVars:
+      - fromGroup: thriftlens-backend-common
+      - key: PORT
+        value: 8003
+      - key: MCP_SERVER_HOST
+        value: 0.0.0.0
+      - key: MCP_SERVER_PORT
+        value: 8003
+      - key: MCP_SERVER_PATH
+        value: /mcp
+      - key: MCP_SERVER_TRANSPORT
+        value: streamable-http
+
+  - type: pserv
+    name: thriftlens-minio
+    runtime: image
+    region: oregon
+    plan: starter
+    image:
+      url: docker.io/minio/minio:latest
+    dockerCommand: server /data --address :9000
+    envVars:
+      - key: PORT
+        value: 9000
+      - key: MINIO_ROOT_USER
+        value: thriftlens
+      - key: MINIO_ROOT_PASSWORD
+        generateValue: true
+    disk:
+      name: thriftlens-minio-data
+      mountPath: /data
+      sizeGB: 5
+
+  - type: keyvalue
+    name: thriftlens-redis
+    region: oregon
+    plan: starter
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+databases:
+  - name: thriftlens-postgres
+    region: oregon
+    plan: basic-256mb
+    databaseName: thriftlens
+    user: thriftlens
+    postgresMajorVersion: "16"
+    ipAllowList: []

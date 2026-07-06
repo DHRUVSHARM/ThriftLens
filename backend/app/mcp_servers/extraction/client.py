@@ -87,7 +87,7 @@ class ExtractionMCPToolClient:
             connection_config={
                 EXTRACTION_SERVER_NAME: {
                     "transport": "http",
-                    "url": self.settings.extraction_mcp_url,
+                    "url": self.settings.extraction_mcp_endpoint(),
                 }
             },
             allowed_tools=EXTRACTION_ALLOWED_TOOLS,

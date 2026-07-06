@@ -50,14 +50,22 @@ class Settings(BaseSettings):
     product_understanding_agent_enabled: bool = False
     product_understanding_model: str = ""
     product_understanding_max_tool_calls: int = Field(default=3, ge=1, le=5)
-    extraction_mcp_url: str = "http://extraction-mcp:8001/mcp"
-    discovery_mcp_url: str = "http://discovery-mcp:8002/mcp"
+    extraction_mcp_url: str = ""
+    extraction_mcp_host: str = ""
+    extraction_mcp_port: int = Field(default=8001, ge=1)
+    discovery_mcp_url: str = ""
+    discovery_mcp_host: str = ""
+    discovery_mcp_port: int = Field(default=8002, ge=1)
     discovery_model: str = ""
     discovery_max_engines: int = Field(default=3, ge=1, le=5)
     discovery_engine_allowlist: str = "google_shopping,google,bing_shopping,ebay,amazon,walmart,home_depot"
-    ranking_mcp_url: str = "http://ranking-mcp:8003/mcp"
+    ranking_mcp_url: str = ""
+    ranking_mcp_host: str = ""
+    ranking_mcp_port: int = Field(default=8003, ge=1)
 
-    minio_endpoint: str = "minio:9000"
+    minio_endpoint: str = ""
+    minio_host: str = ""
+    minio_port: int = Field(default=9000, ge=1)
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "thriftlens-uploads"
@@ -84,6 +92,16 @@ class Settings(BaseSettings):
 
     def gemini_provider_api_key(self) -> str:
         return self.gemini_api_key.strip() or self.google_api_key.strip() or self.google_cloud_api_key.strip()
+
+    def sqlalchemy_database_url(self) -> str:
+        url = self.database_url.strip()
+        if url.startswith("postgresql+asyncpg://"):
+            return url
+        if url.startswith("postgresql://"):
+            return f"postgresql+asyncpg://{url.split('://', 1)[1]}"
+        if url.startswith("postgres://"):
+            return f"postgresql+asyncpg://{url.split('://', 1)[1]}"
+        return url
 
     def build_serpapi_mcp_url(self) -> str:
         base_url = self.serpapi_mcp_base_url.rstrip("/")
@@ -121,8 +139,58 @@ class Settings(BaseSettings):
     def discovery_allowed_engines(self) -> list[str]:
         return [engine.strip() for engine in self.discovery_engine_allowlist.split(",") if engine.strip()]
 
+    def extraction_mcp_endpoint(self) -> str:
+        return self._http_service_url(
+            explicit_url=self.extraction_mcp_url,
+            host=self.extraction_mcp_host,
+            port=self.extraction_mcp_port,
+            fallback_host="extraction-mcp",
+            path="/mcp",
+        )
+
+    def discovery_mcp_endpoint(self) -> str:
+        return self._http_service_url(
+            explicit_url=self.discovery_mcp_url,
+            host=self.discovery_mcp_host,
+            port=self.discovery_mcp_port,
+            fallback_host="discovery-mcp",
+            path="/mcp",
+        )
+
+    def ranking_mcp_endpoint(self) -> str:
+        return self._http_service_url(
+            explicit_url=self.ranking_mcp_url,
+            host=self.ranking_mcp_host,
+            port=self.ranking_mcp_port,
+            fallback_host="ranking-mcp",
+            path="/mcp",
+        )
+
+    def object_storage_endpoint(self) -> str:
+        endpoint = self.minio_endpoint.strip()
+        if endpoint:
+            return endpoint.removeprefix("http://").removeprefix("https://")
+        host = self.minio_host.strip() or "minio"
+        return f"{host}:{self.minio_port}"
+
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    def _http_service_url(
+        self,
+        *,
+        explicit_url: str,
+        host: str,
+        port: int,
+        fallback_host: str,
+        path: str,
+    ) -> str:
+        url = explicit_url.strip()
+        if url:
+            return url
+        service_host = host.strip() or fallback_host
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        return f"http://{service_host}:{port}{normalized_path}"
 
 
 @lru_cache
