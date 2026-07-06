@@ -44,6 +44,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Avoid logging secrets or secret-bearing URLs.
 - Keep local Compose commands working.
 - Keep Render private service ports away from private-network restricted ports.
+- Do not enable Render Preview Environments because the chosen Hobby workspace does not support them.
 
 ## Acceptance Criteria
 
@@ -69,5 +70,6 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Full AWS deployment.
 - Replacing MinIO with managed S3-compatible object storage.
 - Horizontal autoscaling policy tuning.
+- Render Preview Environments.
 - External monitoring/log streaming setup.
 - Running the actual Render deployment from this local environment.

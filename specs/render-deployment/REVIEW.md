@@ -24,6 +24,7 @@ The implementation matches the Render deployment spec:
 
 - Actual Render deployment URL is still `TBD` until the Blueprint is created and verified in the Render dashboard.
 - Render Blueprint validation was not run through Render CLI/API locally.
+- Render Preview Environments are intentionally disabled because the selected Hobby workspace does not support them.
 
 ## Improvement Suggestions
 
