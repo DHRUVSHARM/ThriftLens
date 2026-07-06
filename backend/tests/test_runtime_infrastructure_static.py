@@ -40,6 +40,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "GEMINI_RANKING_ENABLED",
             "SERPAPI_API_KEY",
             "SERPAPI_MCP_BASE_URL",
+            "SERPAPI_TIMEOUT_SECONDS",
             "PROVIDER_BACKOFF_BASE_SECONDS",
             "PROVIDER_BACKOFF_MAX_SECONDS",
             "PROVIDER_JITTER_RATIO",
@@ -139,6 +140,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("mountPath: /data", blueprint)
         self.assertIn("NEXT_PUBLIC_API_BASE_URL", blueprint)
         self.assertIn("CORS_ALLOWED_ORIGINS", blueprint)
+        self.assertIn("SERPAPI_TIMEOUT_SECONDS", blueprint)
         self.assertIn("healthCheckPath: /api/live", blueprint)
         self.assertNotIn("healthCheckPath: /api/health", blueprint)
         self.assertIn("fromDatabase:", blueprint)

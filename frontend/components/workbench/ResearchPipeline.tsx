@@ -34,6 +34,9 @@ export function ResearchPipeline({ job }: { job: ResearchJob | null }) {
                   <span>{substeps[0].label}</span>
                 </div>
               ) : null}
+              {stage.id === "research" && state === "active" ? (
+                <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">Live sources may take a minute.</p>
+              ) : null}
             </div>
           );
         })}

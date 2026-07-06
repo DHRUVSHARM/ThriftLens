@@ -67,6 +67,7 @@ The app shows user-safe uncertainty instead of hiding it.
 - **Camera perception layer:** camera capture is implemented as a frontend-only source of image evidence. A captured frame becomes the same validated image `File` as upload, so storage, TTL cleanup, safety screening, extraction, and ranking all stay on the existing production path.
 - **UX:** the product starts with a designed landing/workbench experience rather than a generic dashboard or chat UI. Progress substates make long-running extraction/search/ranking feel observable.
 - **Failure behavior:** no fake live results. Missing sources, provider failures, rate limits, unsafe input, unclear input, and non-product requests become explicit user-facing states.
+- **Live search timeout:** SerpAPI/Google Shopping calls can take much longer than Gemini control calls in production. The deployment keeps `PROVIDER_TIMEOUT_SECONDS` tight for general provider work and uses `SERPAPI_TIMEOUT_SECONDS` as the longer, search-specific budget.
 
 ## What Was Intentionally Left Out
 

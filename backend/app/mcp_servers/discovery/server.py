@@ -5,6 +5,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from app.config import get_settings
 from app.logging_config import configure_secret_redaction_logging
 from app.mcp_runtime.tool_errors import run_mcp_tool
 from app.mcp_servers.discovery.tools import (
@@ -71,11 +72,15 @@ async def plan_search_sources(
 
 @mcp.tool(name="execute_search_plan")
 async def execute_search_plan(search_plan: dict[str, Any]) -> dict[str, Any]:
+    settings = get_settings()
     return await run_mcp_tool(
         tool_name="execute_search_plan",
         dependency="serpapi",
         operation="discovery_search_sources",
-        call=execute_search_plan_tool(search_plan=search_plan, policy=stateless_tool_policy()),
+        call=execute_search_plan_tool(
+            search_plan=search_plan,
+            policy=stateless_tool_policy(timeout_seconds=settings.serpapi_timeout_seconds),
+        ),
     )
 
 

@@ -37,6 +37,8 @@ envVarGroups:
         value: https://mcp.serpapi.com
       - key: SERPAPI_MAX_CALLS_PER_JOB
         value: 3
+      - key: SERPAPI_TIMEOUT_SECONDS
+        value: 60
       - key: PROVIDER_TIMEOUT_SECONDS
         value: 20
       - key: PROVIDER_MAX_RETRIES

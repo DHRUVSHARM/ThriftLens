@@ -232,6 +232,7 @@ All variables are documented in `.env.example`. The most important ones are:
 - `CORS_ALLOWED_ORIGINS`: allowed frontend origins for the API
 - `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_CLOUD_API_KEY`: Gemini-compatible live model key
 - `SERPAPI_API_KEY`: live source research key
+- `SERPAPI_TIMEOUT_SECONDS`: search-specific timeout for slow live shopping providers
 - `TEXT_SAFETY_MODEL_ENABLED`: enables structured model-assisted text safety classification
 - `PRODUCT_UNDERSTANDING_AGENT_ENABLED`: enables bounded product-understanding model flow
 - `DISCOVERY_MODEL`: model for product profile and search planning

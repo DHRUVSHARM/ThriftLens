@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     serpapi_api_key: str = ""
     serpapi_mcp_base_url: str = "https://mcp.serpapi.com"
     serpapi_max_calls_per_job: int = Field(default=2, ge=1)
+    serpapi_timeout_seconds: float = Field(default=60.0, gt=0)
     provider_timeout_seconds: float = Field(default=20.0, gt=0)
     provider_max_retries: int = Field(default=1, ge=0)
     provider_backoff_base_seconds: float = Field(default=2.0, gt=0)

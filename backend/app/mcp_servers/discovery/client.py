@@ -173,7 +173,7 @@ def search_plan_timeout_seconds(search_plan: ProductSearchPlan) -> float:
     planned_calls = min(max(len(search_plan.plan_items), 1), settings.serpapi_max_calls_per_job)
     attempts_per_call = settings.provider_max_retries + 1
     retry_gaps = max(0, settings.provider_max_retries) * settings.provider_backoff_base_seconds
-    per_call_budget = (settings.provider_timeout_seconds * attempts_per_call) + retry_gaps
+    per_call_budget = (settings.serpapi_timeout_seconds * attempts_per_call) + retry_gaps
     return per_call_budget * planned_calls + 5
 
 

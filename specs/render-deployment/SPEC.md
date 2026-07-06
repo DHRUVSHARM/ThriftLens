@@ -38,6 +38,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Database config must accept Render's `postgresql://` connection string and convert it to SQLAlchemy's asyncpg URL.
 - App storage must create the MinIO bucket idempotently so Render does not need the local `minio-init` service.
 - Worker commands must pin Celery concurrency/prefetch and recycle child processes to keep memory predictable on small instances.
+- Live SerpAPI search must use a source-specific timeout so slow Google Shopping results do not force a failed job while generic model/provider calls stay tightly bounded.
 - Render's API web-service HTTP health check must use a cheap liveness endpoint (`/api/live`) instead of the full dependency health endpoint.
 - The full runtime health endpoint (`/api/health`) must remain available for the frontend startup check, manual smoke tests, and dependency diagnostics.
 - README, `.env.example`, and APPROACH notes must describe Render deployment knobs and post-create URL wiring.
@@ -52,6 +53,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Prefer queue backpressure over high per-worker parallelism for the Starter deployment.
 - Keep Render private service ports away from private-network restricted ports.
 - Keep platform liveness checks lightweight; deeper Postgres, Redis, MinIO, and provider-key checks should be explicit runtime diagnostics rather than Render's every-few-seconds probe.
+- Keep `SERPAPI_TIMEOUT_SECONDS` separate from `PROVIDER_TIMEOUT_SECONDS` so live search latency does not make all model calls wait longer.
 - Do not enable Render Preview Environments because the chosen Hobby workspace does not support them.
 
 ## Acceptance Criteria
@@ -63,6 +65,7 @@ Render official docs support Blueprint-managed services, Docker services, privat
 - Database engine uses an asyncpg-compatible URL even when Render provides `postgresql://`.
 - Upload and health paths can ensure the MinIO bucket exists without `minio-init`.
 - API exposes `/api/live` for Render liveness and keeps `/api/health` for full dependency health.
+- Render Blueprint documents and sets `SERPAPI_TIMEOUT_SECONDS` separately from the generic provider timeout.
 - Render and Docker Compose worker commands set bounded Celery concurrency and prefetch behavior.
 - `.env.example` documents Render host/port deployment variables with safe placeholders.
 - README and APPROACH include Render deployment guidance.

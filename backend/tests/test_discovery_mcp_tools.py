@@ -8,6 +8,7 @@ from app.mcp_servers.discovery.tools import (
     _call_gemini_json,
     build_search_context_tool,
     classify_product_profile_tool,
+    execute_search_plan_tool,
     normalize_discovery_response,
     normalize_products_tool,
     plan_search_sources_tool,
@@ -268,6 +269,7 @@ def test_search_plan_timeout_scales_with_planned_calls_and_retries(monkeypatch: 
         "app.mcp_servers.discovery.client.get_settings",
         lambda: Settings(
             provider_timeout_seconds=20,
+            serpapi_timeout_seconds=40,
             provider_max_retries=1,
             provider_backoff_base_seconds=2,
             serpapi_max_calls_per_job=2,
@@ -288,7 +290,7 @@ def test_search_plan_timeout_scales_with_planned_calls_and_retries(monkeypatch: 
         ]
     )
 
-    assert search_plan_timeout_seconds(plan) == 89
+    assert search_plan_timeout_seconds(plan) == 169
 
 
 @pytest.mark.anyio
@@ -297,6 +299,7 @@ async def test_discovery_client_uses_scaled_timeout_for_execute_search_plan(monk
         "app.mcp_servers.discovery.client.get_settings",
         lambda: Settings(
             provider_timeout_seconds=20,
+            serpapi_timeout_seconds=40,
             provider_max_retries=1,
             provider_backoff_base_seconds=2,
             serpapi_max_calls_per_job=2,
@@ -322,7 +325,41 @@ async def test_discovery_client_uses_scaled_timeout_for_execute_search_plan(monk
     result = await DiscoveryMCPToolClient(runtime=runtime).execute_search_plan(search_plan=plan)  # type: ignore[arg-type]
 
     assert result.raw_results == []
-    assert runtime.policy_timeout == 89
+    assert runtime.policy_timeout == 169
+
+
+@pytest.mark.anyio
+async def test_execute_search_plan_uses_serpapi_specific_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, float] = {}
+
+    class FakeRuntime:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            captured["timeout"] = kwargs["policy"].timeout_seconds
+
+        async def invoke_tool(self, **kwargs):  # type: ignore[no-untyped-def]
+            return {"shopping_results": []}
+
+    monkeypatch.setattr("app.mcp_servers.discovery.tools.MCPRuntime", FakeRuntime)
+    settings = Settings(
+        provider_mode="REAL_MODE",
+        serpapi_api_key="secret-serpapi-key",
+        serpapi_timeout_seconds=55,
+        serpapi_max_calls_per_job=1,
+    )
+    plan = ProductSearchPlan(
+        planItems=[
+            ProductSearchPlanItem(
+                engine="google_shopping",
+                params={"engine": "google_shopping", "q": "black cotton t-shirt"},
+                priority=1,
+            )
+        ]
+    )
+
+    result = await execute_search_plan_tool(search_plan=plan.model_dump(by_alias=True), settings=settings)
+
+    assert captured["timeout"] == 55
+    assert result["rawResults"]
 
 
 def test_coerce_mcp_list_result_aggregates_multiple_text_blocks() -> None:

@@ -141,7 +141,8 @@ Search planning rules:
 - Use a second `google_shopping` query for similar alternatives only when no better distinct product source fits or when the call budget/allowlist leaves no better option.
 - Do not spend the second call budget on a generic web search if a broader shopping query would produce better comparable product candidates.
 - If the model omits a similar-alternatives search and call budget remains, code adds a broader validated shopping query.
-- `execute_search_plan` must use a timeout budget that scales with validated planned search calls and configured provider retries. A multi-source search should not be cancelled by the worker-to-MCP timeout while individual SerpAPI calls are still within their own timeout/retry policy.
+- `execute_search_plan` must use a timeout budget that scales with validated planned search calls, the SerpAPI-specific timeout, and configured provider retries. A multi-source search should not be cancelled by the worker-to-MCP timeout while individual SerpAPI calls are still within their own timeout/retry policy.
+- SerpAPI/Google Shopping calls may be slower than model-control calls, so `SERPAPI_TIMEOUT_SECONDS` should govern upstream source search while `PROVIDER_TIMEOUT_SECONDS` remains the generic provider default.
 - SerpAPI call failures should be tracked at the SerpAPI/source operation boundary. Local discovery MCP health should not be degraded merely because one upstream search source timed out and was converted into a source-level error.
 
 ### Ranking MCP Server

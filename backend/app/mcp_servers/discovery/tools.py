@@ -125,6 +125,7 @@ async def execute_search_plan_tool(
     if not active_settings.serpapi_api_key:
         raise WorkflowProviderError("provider_configuration_error", "Live provider configuration is incomplete.", retryable=False)
 
+    effective_policy = policy or ToolExecutionPolicy(timeout_seconds=active_settings.serpapi_timeout_seconds)
     runtime = MCPRuntime(
         connection_config={
             SERPAPI_SERVER_NAME: {
@@ -133,7 +134,7 @@ async def execute_search_plan_tool(
             }
         },
         allowed_tools={SERPAPI_SEARCH_TOOL},
-        policy=policy or ToolExecutionPolicy(),
+        policy=effective_policy,
         secrets=(active_settings.serpapi_api_key,),
     )
     raw_results: list[ProductSearchRawResult] = []

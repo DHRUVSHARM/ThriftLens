@@ -457,6 +457,7 @@ test("shows only the current substate while source research is running", async (
   const progress = page.getByLabel("Research progress");
   await expect(progress.getByText("Searching sources").first()).toBeVisible();
   await expect(progress.getByText("Source plan", { exact: true })).toBeVisible();
+  await expect(progress.getByText("Live sources may take a minute.", { exact: true })).toBeVisible();
   await expect(progress.getByText("Product profile", { exact: true })).toHaveCount(0);
   await expect(progress.getByText("Search context", { exact: true })).toHaveCount(0);
   await expect(progress.getByText("Live source search", { exact: true })).toHaveCount(0);
