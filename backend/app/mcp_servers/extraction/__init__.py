@@ -1,0 +1,2 @@
+"""Product extraction MCP capability."""
+

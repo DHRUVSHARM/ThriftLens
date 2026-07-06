@@ -4,6 +4,28 @@ from app.workflow_contracts import ProductReference, SourceProduct, WorkflowProv
 
 # data with examples for running app in sample mode 
 class SampleExtractionProvider:
+    async def screen_image_safety(
+        self,
+        *,
+        request_payload: dict[str, Any],
+        image_metadata: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "safetyStatus": "safe",
+            "unsafeReasons": [],
+            "confidence": 0.95,
+            "userSafeMessage": None,
+        }
+
+    async def screen_text_safety(self, *, request_payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "safetyStatus": "safe",
+            "reason": "product_description",
+            "confidence": 0.9,
+            "detectedPatterns": [],
+            "userSafeMessage": None,
+        }
+
     async def gate_image(self, *, request_payload: dict[str, Any], image_metadata: list[dict[str, Any]]) -> dict[str, Any]:
         target = request_payload.get("targetDescription")
         return {

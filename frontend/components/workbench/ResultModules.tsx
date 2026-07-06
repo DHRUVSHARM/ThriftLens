@@ -56,6 +56,8 @@ export function ResultsWorkbench({
   const bestCandidate = groups.closest[0] || brief.rankedProducts[0] || null;
   const isVerifiedBest = bestCandidate?.group === "closest" && bestCandidate.score >= 0.74;
   const browserProducts = bestCandidate ? brief.rankedProducts.filter((item) => item !== bestCandidate) : brief.rankedProducts;
+  const sharedCaveats = commonCaveatMessages(brief.rankedProducts);
+  const suppressedCaveats = new Set(sharedCaveats.map(normalizeCaveat));
 
   return (
     <div className="grid gap-4">
@@ -63,13 +65,12 @@ export function ResultsWorkbench({
         <Panel elevated className="p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <BadgeCheck size={18} className="text-[var(--accent)]" aria-hidden="true" />
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">{isVerifiedBest ? "Best match" : "Strongest candidate"}</h2>
-            {!isVerifiedBest && bestCandidate ? <Badge tone="warning">No exact match verified</Badge> : null}
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">{isVerifiedBest ? "Best match" : "Best available match"}</h2>
+            {!isVerifiedBest && bestCandidate ? <Badge tone="warning">Review caveats</Badge> : null}
           </div>
           {bestCandidate ? (
             <div className="grid gap-3">
-              {!isVerifiedBest ? <p className="text-sm leading-6 text-[var(--text-secondary)]">No exact match was verified, so this highlights the strongest available candidate.</p> : null}
-              <ProductCard item={bestCandidate} featured lowConfidence={!isVerifiedBest} />
+              <ProductCard item={bestCandidate} featured lowConfidence={!isVerifiedBest} suppressedCaveats={suppressedCaveats} />
             </div>
           ) : (
             <p className="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-4 text-sm text-[var(--text-secondary)]">No source-backed products were returned.</p>
@@ -92,7 +93,7 @@ export function ResultsWorkbench({
           </div>
         </div>
       </div>
-      <ProductBrowser products={browserProducts} />
+      <ProductBrowser products={browserProducts} sharedCaveats={sharedCaveats} suppressedCaveats={suppressedCaveats} />
       <ReferenceSignals brief={brief} />
     </div>
   );
@@ -116,7 +117,15 @@ function EmptyWorkbench() {
 function FailureGuidance({ job, onRetry, onRefine }: { job: ResearchJob; onRetry: () => void; onRefine: () => void }) {
   const code = job.safeError?.code;
   const isRefinement = job.status === "needs_refinement";
-  const title = isRefinement ? "More focus needed" : code === "unsafe_image" ? "Image cannot be processed" : "Research stopped";
+  const title = isRefinement
+    ? "More focus needed"
+    : code === "unsafe_image"
+      ? "Image cannot be processed"
+      : code === "unsafe_text"
+        ? "Description cannot be processed"
+        : code === "regulated_product"
+          ? "Product category unavailable"
+          : "Research stopped";
   const message = job.safeError?.message || (isRefinement ? "Add a focus note or clearer product evidence to continue." : "Try refining the evidence or retrying when available.");
   return (
     <GuidanceState
@@ -211,6 +220,8 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function TrustEvidence({ brief }: { brief: ProductResearchBrief }) {
+  const evidenceSummary = trustEvidenceSummary(brief);
+  const evidenceNotes = trustEvidenceNotes(brief);
   return (
     <Panel className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -218,19 +229,27 @@ function TrustEvidence({ brief }: { brief: ProductResearchBrief }) {
         <Badge>{brief.sourceCount} sources</Badge>
       </div>
       <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{brief.freshnessNote}</p>
-      {brief.uncertaintyNotes.length ? (
+      {evidenceNotes.length ? (
         <ul className="mt-3 grid gap-1 text-sm text-[var(--text-muted)]">
-          {brief.uncertaintyNotes.map((note) => (
+          {evidenceNotes.map((note) => (
             <li key={note}>{note}</li>
           ))}
         </ul>
       ) : null}
-      {brief.rankingExplanation?.summary ? <p className="mt-3 border-t border-[var(--border)] pt-3 text-sm text-[var(--text-secondary)]">{brief.rankingExplanation.summary}</p> : null}
+      {evidenceSummary ? <p className="mt-3 border-t border-[var(--border)] pt-3 text-sm text-[var(--text-secondary)]">{evidenceSummary}</p> : null}
     </Panel>
   );
 }
 
-function ProductBrowser({ products }: { products: RankedProduct[] }) {
+function ProductBrowser({
+  products,
+  sharedCaveats,
+  suppressedCaveats,
+}: {
+  products: RankedProduct[];
+  sharedCaveats: string[];
+  suppressedCaveats: Set<string>;
+}) {
   const [selectedGroup, setSelectedGroup] = useState<ProductGroupValue>("all");
   const [page, setPage] = useState(0);
   const productKey = products.map((item) => `${item.product.source}:${item.product.title}:${item.group}`).join("|");
@@ -262,11 +281,20 @@ function ProductBrowser({ products }: { products: RankedProduct[] }) {
     <Panel className="p-4">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">Explore matches</h2>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">Browse source-backed candidates by match type.</p>
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">{products.length === 1 ? "Available match" : "Explore matches"}</h2>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            {products.length === 1
+              ? "Only one source-backed candidate was available for this run."
+              : "Browse source-backed candidates by match type."}
+          </p>
         </div>
         <Badge>{products.length} products</Badge>
       </div>
+      {sharedCaveats.length ? (
+        <p className="mb-4 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-3 text-sm leading-6 text-[var(--text-secondary)]">
+          Shared caveat: {sharedCaveats[0]}
+        </p>
+      ) : null}
 
       <select
         aria-label="Match group"
@@ -312,6 +340,7 @@ function ProductBrowser({ products }: { products: RankedProduct[] }) {
                 key={productRenderKey(item, activePage * PRODUCT_PAGE_SIZE + index)}
                 item={item}
                 lowConfidence={item.group === "possible"}
+                suppressedCaveats={suppressedCaveats}
               />
             ))}
           </div>
@@ -354,6 +383,34 @@ function productRenderKey(item: RankedProduct, index: number): string {
   ].join("|");
 }
 
+function commonCaveatMessages(products: RankedProduct[]): string[] {
+  if (products.length < 2) return [];
+  const counts = new Map<string, { message: string; count: number }>();
+  for (const product of products) {
+    const seenForProduct = new Set<string>();
+    for (const message of productCaveatMessages(product)) {
+      const key = normalizeCaveat(message);
+      if (!key || seenForProduct.has(key)) continue;
+      const existing = counts.get(key);
+      counts.set(key, { message: existing?.message || message, count: (existing?.count || 0) + 1 });
+      seenForProduct.add(key);
+    }
+  }
+  return Array.from(counts.values())
+    .filter((item) => item.count === products.length)
+    .map((item) => item.message);
+}
+
+function productCaveatMessages(product: RankedProduct): string[] {
+  return (product.mismatches || [])
+    .map((mismatch) => mismatch.message?.trim())
+    .filter((message): message is string => Boolean(message));
+}
+
+function normalizeCaveat(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function sortProductsForGroup(group: ProductGroupValue, products: RankedProduct[]): RankedProduct[] {
   const sortedProducts = [...products];
   if (group === "cheaper") {
@@ -376,6 +433,68 @@ function comparePrices(left: RankedProduct, right: RankedProduct, direction: "as
   return direction === "asc" ? leftPrice - rightPrice : rightPrice - leftPrice;
 }
 
+function trustEvidenceSummary(brief: ProductResearchBrief): string {
+  const strategySummary = plainSummary(brief.rankingExplanation?.modelSummary || brief.rankingExplanation?.summary || "");
+  if (brief.statusReason === "possible_matches_only") {
+    if (strategySummary) return strategySummary;
+    return brief.sourceCount <= 1
+      ? "ThriftLens found one source-backed candidate, but it did not clear the exact-match threshold."
+      : `ThriftLens compared ${brief.sourceCount} source-backed candidates and is showing alternatives because none cleared the exact-match threshold.`;
+  }
+  if (strategySummary) return strategySummary;
+  if (brief.sourceCount > 1) {
+    return `ThriftLens compared ${brief.sourceCount} source-backed candidates using product details, price, and source quality.`;
+  }
+  if (brief.sourceCount === 1) {
+    return "ThriftLens found one source-backed candidate and compared it with the extracted product details.";
+  }
+  return strategySummary || "";
+}
+
+function plainSummary(value: string): string {
+  const text = value.trim();
+  if (!text.startsWith("{") || !text.endsWith("}")) return text;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    for (const key of ["summary", "modelSummary", "explanation", "text"]) {
+      const candidate = parsed[key];
+      if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    }
+  } catch {
+    return text;
+  }
+  return "";
+}
+
+function trustEvidenceNotes(brief: ProductResearchBrief): string[] {
+  const mapped = brief.uncertaintyNotes.map((note) => {
+    if (isProductInfoNote(note)) return "";
+    if (note === "Source data was discovered through the Product Discovery MCP workflow.") {
+      return "Matches are based on live source results and the product details extracted from your evidence.";
+    }
+    if (note === "No verified exact match was found; showing possible alternatives instead.") {
+      return "No exact match was verified; review the alternatives before relying on price or fit.";
+    }
+    if (note === "provider_unavailable") {
+      return "Research sources are temporarily unavailable.";
+    }
+    return note;
+  });
+  return Array.from(new Set(mapped.filter(Boolean)));
+}
+
+function isProductInfoNote(note: string): boolean {
+  return (
+    note.startsWith("Ranking prioritized shopper signals") ||
+    note.startsWith("Search and ranking used") ||
+    note.startsWith("Research ran ")
+  );
+}
+
+function productInfoNotes(brief: ProductResearchBrief): string[] {
+  return brief.uncertaintyNotes.filter(isProductInfoNote);
+}
+
 function countProductsByGroup(products: RankedProduct[]): Record<ProductGroupValue, number> {
   return {
     all: products.length,
@@ -389,6 +508,7 @@ function countProductsByGroup(products: RankedProduct[]): Record<ProductGroupVal
 
 function ReferenceSignals({ brief }: { brief: ProductResearchBrief }) {
   const reference = brief.productReference;
+  const infoNotes = productInfoNotes(brief);
   const signals = [
     ["Type", reference.productType],
     ["Brand", reference.brand || "Unknown"],
@@ -397,7 +517,13 @@ function ReferenceSignals({ brief }: { brief: ProductResearchBrief }) {
   ];
   return (
     <Panel className="p-4">
-      <h2 className="text-base font-semibold text-[var(--text-primary)]">Extracted product signals</h2>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Product info and ranking basis</h2>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">The extracted product facts and strategy ThriftLens used to search and compare matches.</p>
+        </div>
+        <Badge tone="accent">Product profile</Badge>
+      </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {signals.map(([label, value]) => (
           <Metric key={label} label={label} value={value} />
@@ -411,6 +537,16 @@ function ReferenceSignals({ brief }: { brief: ProductResearchBrief }) {
         </div>
       ) : null}
       {reference.assumptions?.length ? <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{reference.assumptions.join(" ")}</p> : null}
+      {infoNotes.length ? (
+        <div className="mt-4 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Research basis</p>
+          <ul className="mt-2 grid gap-1.5 text-sm leading-6 text-[var(--text-secondary)]">
+            {infoNotes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </Panel>
   );
 }

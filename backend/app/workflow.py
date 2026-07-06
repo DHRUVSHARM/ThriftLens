@@ -38,9 +38,15 @@ PROVIDER_FAILURE_MESSAGES = {
 }
 INPUT_GATE_MESSAGES = {
     "unsafe_image": "This image cannot be processed. Upload a clear product image instead.",
+    "unsafe_text": "This text cannot be processed for product research. Please provide a clear, appropriate product-only description.",
+    "regulated_product": "This product category cannot be researched in ThriftLens. Please choose a standard consumer product.",
+    "image_safety_unclear": "Please provide an image that clearly shows the product you would like to research.",
     "non_product_image": "This does not look like a product image. Upload a clearer image or describe the product in text.",
-    "ambiguous_image": "Multiple products were detected. Add a focus note or crop the image to one product.",
+    "ambiguous_image": "Multiple products or objects were detected. Add a short focus note, such as the item type, color, or location, or crop the image to one product.",
     "image_instruction_risk": "This image contains instruction-like text. Add a clearer product image or focus note.",
+    "text_prompt_injection": "Please describe only the product you want researched. Remove instructions, links, or requests unrelated to the product.",
+    "text_input_unclear": "Add a specific product description, such as product type, color, brand, material, or the item to focus on.",
+    "text_not_product": "Describe the product you want researched instead of asking for links, websites, or assistant instructions.",
 }
 
 
@@ -66,71 +72,74 @@ class ResearchWorkflow:
         preferences = request_payload.get("researchPreferences") or {}
         image_metadata = await get_uploaded_images(job_id)
 
-        await update_job_stage(job_id, status="extracting_reference", progress_message="Extracting product reference.")
-        await record_job_attempt(job_id=job_id, stage="extractReference", dependency="sample-extraction", attempt=1)
+        if job.get("product_reference"):
+            reference = ProductReference.model_validate(job["product_reference"])
+        else:
+            await update_job_stage(job_id, status="extracting_reference", progress_message="Extracting product reference.")
+            await record_job_attempt(job_id=job_id, stage="extractReference", dependency="sample-extraction", attempt=1)
 
-        try:
-            if job["input_type"] == "image":
-                await record_job_attempt(job_id=job_id, stage="gateImage", dependency="image-gate", attempt=1)
-                gate = await self._gate_image(request_payload, image_metadata)
-                gate_decision = input_gate_decision(gate, request_payload, self.settings)
-                gate_code = input_gate_code(gate)
-                if gate_decision == "fail_safe":
-                    await mark_job_failed(
-                        job_id,
-                        code=gate_code,
-                        message=safe_input_gate_message(gate_code),
-                        retryable=False,
-                    )
-                    return WorkflowResult(jobId=job_id, status="failed")
-                if gate_decision == "needs_refinement":
-                    await mark_job_needs_refinement(
-                        job_id,
-                        code=gate_code,
-                        message=safe_input_gate_message(gate_code),
-                    )
-                    return WorkflowResult(jobId=job_id, status="needs_refinement")
-                quality_reason = image_quality_extraction_reason(gate, request_payload, self.settings)
-                if quality_reason:
-                    request_payload = {
-                        **request_payload,
-                        "_useQualityExtractionModel": True,
-                        "_qualityExtractionReason": quality_reason,
-                    }
+            try:
+                if job["input_type"] == "image":
+                    await record_job_attempt(job_id=job_id, stage="gateImage", dependency="image-gate", attempt=1)
+                    gate = await self._gate_image(request_payload, image_metadata)
+                    gate_decision = input_gate_decision(gate, request_payload, self.settings)
+                    gate_code = input_gate_code(gate)
+                    if gate_decision == "fail_safe":
+                        await mark_job_failed(
+                            job_id,
+                            code=gate_code,
+                            message=safe_input_gate_message(gate_code),
+                            retryable=False,
+                        )
+                        return WorkflowResult(jobId=job_id, status="failed")
+                    if gate_decision == "needs_refinement":
+                        await mark_job_needs_refinement(
+                            job_id,
+                            code=gate_code,
+                            message=safe_input_gate_message(gate_code),
+                        )
+                        return WorkflowResult(jobId=job_id, status="needs_refinement")
+                    quality_reason = image_quality_extraction_reason(gate, request_payload, self.settings)
+                    if quality_reason:
+                        request_payload = {
+                            **request_payload,
+                            "_useQualityExtractionModel": True,
+                            "_qualityExtractionReason": quality_reason,
+                        }
 
-            reference = await self._extract_reference(job["input_type"], request_payload, image_metadata)
-        except ExtractionOutputError:
-            await mark_job_failed(
+                reference = await self._extract_reference(job["input_type"], request_payload, image_metadata)
+            except ExtractionOutputError:
+                await mark_job_failed(
+                    job_id,
+                    code="reference_extraction_failed",
+                    message="We could not extract enough product detail. Try a clearer image or more specific description.",
+                    retryable=True,
+                )
+                return WorkflowResult(jobId=job_id, status="failed")
+            except WorkflowProviderError as exc:
+                await record_job_attempt(
+                    job_id=job_id,
+                    stage="extractReference",
+                    dependency="extraction-provider",
+                    attempt=2,
+                    error_code=exc.code,
+                    retryable=exc.retryable,
+                )
+                await mark_job_failed(
+                    job_id,
+                    code=exc.code,
+                    message=safe_provider_message(exc.code),
+                    retryable=exc.retryable,
+                )
+                return WorkflowResult(jobId=job_id, status="failed")
+
+            reference_payload = model_dump_alias(reference)
+            await store_product_reference(
                 job_id,
-                code="reference_extraction_failed",
-                message="We could not extract enough product detail. Try a clearer image or more specific description.",
-                retryable=True,
+                product_reference=reference_payload,
+                progress_message="Product reference extracted.",
             )
-            return WorkflowResult(jobId=job_id, status="failed")
-        except WorkflowProviderError as exc:
-            await record_job_attempt(
-                job_id=job_id,
-                stage="extractReference",
-                dependency="extraction-provider",
-                attempt=2,
-                error_code=exc.code,
-                retryable=exc.retryable,
-            )
-            await mark_job_failed(
-                job_id,
-                code=exc.code,
-                message=safe_provider_message(exc.code),
-                retryable=exc.retryable,
-            )
-            return WorkflowResult(jobId=job_id, status="failed")
-
-        reference_payload = model_dump_alias(reference)
-        await store_product_reference(
-            job_id,
-            product_reference=reference_payload,
-            progress_message="Product reference extracted.",
-        )
-        await update_dependency_health(dependency="sample-extraction", state="healthy")
+            await update_dependency_health(dependency="sample-extraction", state="healthy")
 
         await update_job_stage(job_id, status="researching_sources", progress_message="Researching source-backed products.")
         await record_job_attempt(job_id=job_id, stage="researchProducts", dependency="sample-research", attempt=1)

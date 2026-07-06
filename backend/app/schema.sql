@@ -38,9 +38,12 @@ CREATE TABLE IF NOT EXISTS job_attempts (
     attempt INTEGER NOT NULL,
     error_code TEXT,
     retryable BOOLEAN NOT NULL DEFAULT FALSE,
+    metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finished_at TIMESTAMPTZ
 );
+
+ALTER TABLE job_attempts ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::JSONB;
 
 CREATE TABLE IF NOT EXISTS dependency_health (
     dependency TEXT PRIMARY KEY,

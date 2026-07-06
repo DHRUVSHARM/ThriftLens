@@ -3,12 +3,16 @@ import re
 from typing import Any
 
 from app.config import get_settings
+from app.mcp_runtime.client import MCPRuntime
+from app.mcp_runtime.registry import namespaced_tool_name
 from app.redaction import redact_provider_secrets
 from app.tool_policy import ToolExecutionPolicy
 from app.workflow_contracts import ProductReference, WorkflowProviderError
 
 ALLOWED_ENGINE = "google_shopping"
 ALLOWED_PARAM_KEYS = {"engine", "q", "location", "gl", "hl", "num"}
+SERPAPI_SERVER_NAME = "serpapi"
+SERPAPI_SEARCH_TOOL = namespaced_tool_name(SERPAPI_SERVER_NAME, "search")
 
 
 class SerpApiMCPResearchProvider:
@@ -41,6 +45,14 @@ class SerpApiMCPResearchProvider:
             ),
         }
 
+    def build_mcp_runtime(self) -> MCPRuntime:
+        return MCPRuntime(
+            connection_config=self.mcp_connection_config(),
+            allowed_tools={SERPAPI_SEARCH_TOOL},
+            policy=self.policy,
+            secrets=(self.settings.serpapi_api_key,),
+        )
+
     def build_search_params(self, *, query: str, preferences: dict[str, Any]) -> dict[str, Any]:
         params = {
             "engine": ALLOWED_ENGINE,
@@ -61,25 +73,29 @@ class SerpApiMCPResearchProvider:
                 retryable=False,
             )
 
-        async def call() -> list[dict[str, Any]]:
-            return await self._research_with_mcp(product_reference, preferences)
-
-        return await self.policy.run(dependency="serpapi", operation="serpapi_research", call=call)
+        return await self._research_with_mcp(product_reference, preferences)
 
     async def _research_with_mcp(self, product_reference: ProductReference, preferences: dict[str, Any]) -> list[dict[str, Any]]:
-        from langchain_mcp_adapters.client import MultiServerMCPClient
-
-        client = MultiServerMCPClient(self.mcp_connection_config(), handle_tool_errors=False)
-        tools = await client.get_tools()
-        search_tool = next((tool for tool in tools if tool.name == "search"), None)
-        if search_tool is None:
-            raise WorkflowProviderError("serpapi_search_tool_missing", "SerpAPI search tool is unavailable.", retryable=True)
-
+        runtime = self.build_mcp_runtime()
         normalized: list[dict[str, Any]] = []
         queries = product_reference.search_queries or [product_reference.title]
         for query in queries[: self.settings.serpapi_max_calls_per_job]:
             params = self.build_search_params(query=query, preferences=preferences)
-            result = await search_tool.ainvoke({"params": params})
+            try:
+                result = await runtime.invoke_tool(
+                    namespaced_name=SERPAPI_SEARCH_TOOL,
+                    payload={"params": params},
+                    dependency="serpapi",
+                    operation="serpapi_research",
+                )
+            except WorkflowProviderError as exc:
+                if exc.code == "mcp_tool_missing":
+                    raise WorkflowProviderError(
+                        "serpapi_search_tool_missing",
+                        "SerpAPI search tool is unavailable.",
+                        retryable=True,
+                    ) from exc
+                raise
             normalized.extend(normalize_serpapi_response(result))
         return normalized
 

@@ -195,6 +195,7 @@ async def record_job_attempt(
     attempt: int,
     error_code: str | None = None,
     retryable: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     async with engine.begin() as connection:
         await connection.execute(
@@ -207,6 +208,7 @@ async def record_job_attempt(
                     attempt,
                     error_code,
                     retryable,
+                    metadata,
                     finished_at
                 )
                 VALUES (
@@ -216,6 +218,7 @@ async def record_job_attempt(
                     :attempt,
                     :error_code,
                     :retryable,
+                    CAST(:metadata AS JSONB),
                     NOW()
                 )
                 """
@@ -227,6 +230,7 @@ async def record_job_attempt(
                 "attempt": attempt,
                 "error_code": error_code,
                 "retryable": retryable,
+                "metadata": json.dumps(metadata or {}),
             },
         )
 
@@ -238,6 +242,34 @@ async def count_job_attempts(job_id: str) -> int:
             {"job_id": job_id},
         )
         return int(result.scalar_one())
+
+
+async def get_job_attempts(job_id: str) -> list[dict[str, Any]]:
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text(
+                """
+                SELECT stage, dependency, attempt, error_code, retryable, metadata, started_at, finished_at
+                FROM job_attempts
+                WHERE job_id = :job_id
+                ORDER BY started_at ASC, id ASC
+                """
+            ),
+            {"job_id": job_id},
+        )
+        return [
+            {
+                "stage": row._mapping["stage"],
+                "dependency": row._mapping["dependency"],
+                "attempt": row._mapping["attempt"],
+                "error_code": row._mapping["error_code"],
+                "retryable": row._mapping["retryable"],
+                "metadata": _decode_json(row._mapping["metadata"]) or {},
+                "started_at": row._mapping["started_at"],
+                "finished_at": row._mapping["finished_at"],
+            }
+            for row in result
+        ]
 
 
 async def update_dependency_health(

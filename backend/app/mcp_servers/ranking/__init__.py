@@ -1,0 +1,1 @@
+"""Product ranking MCP capability."""

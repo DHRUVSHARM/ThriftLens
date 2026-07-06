@@ -7,6 +7,9 @@ ThriftLens is being built as a Docker Compose app with:
 - `frontend`: Next.js product workbench
 - `api`: FastAPI Job Gateway
 - `worker`: Celery worker
+- `extraction-mcp`: FastMCP product extraction service
+- `discovery-mcp`: FastMCP product discovery service for profile/search planning and SerpAPI-backed source discovery
+- `ranking-mcp`: FastMCP product ranking service for score breakdowns, mismatch caveats, grouping, and explanations
 - `postgres`: durable job/result state
 - `redis`: Celery broker/cache
 - `minio`: temporary uploaded image object storage
@@ -18,7 +21,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Default mode is `SAMPLE_MODE`, so the runtime can start without live Gemini or SerpAPI keys. For real provider calls, set `PROVIDER_MODE=REAL_MODE` and fill `SERPAPI_API_KEY` plus one Gemini-compatible key: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or the starter-template `GOOGLE_CLOUD_API_KEY`.
+The checked-in `.env.example` is configured for `REAL_MODE` so reviewers can copy it, add provider keys, and exercise the production path. Fill `SERPAPI_API_KEY` plus one Gemini-compatible key: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or the starter-template `GOOGLE_CLOUD_API_KEY`. For a no-key local demo, set `PROVIDER_MODE=SAMPLE_MODE`.
 
 Useful URLs:
 
@@ -42,6 +45,14 @@ Key environment variables, safe placeholders, and paid-key source notes are docu
 - `CORS_ALLOWED_ORIGINS`: comma-separated browser origins allowed to call the API
 - `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_CLOUD_API_KEY`: one Gemini-compatible key is required only for live provider calls
 - `SERPAPI_API_KEY`: required only for live source research
+- `TEXT_SAFETY_MODEL_ENABLED`: enables the structured Gemini text safety classifier for long-tail unsafe/non-product intent checks
+- `PRODUCT_UNDERSTANDING_AGENT_ENABLED` and `PRODUCT_UNDERSTANDING_MODEL`: enable the bounded post-safety extraction agent for image/product gate, disambiguation, and reference extraction
+- `EXTRACTION_MCP_URL`: internal URL for the product extraction MCP service
+- `DISCOVERY_MCP_URL`: internal URL for the product discovery MCP service
+- `DISCOVERY_MODEL`: optional Gemini-compatible model for product profile/search planning; blank reuses `GEMINI_EXTRACTION_MODEL`
+- `DISCOVERY_MAX_ENGINES` and `DISCOVERY_ENGINE_ALLOWLIST`: bound model-selected SerpAPI engine planning
+- `RANKING_MCP_URL`: internal URL for the product ranking MCP service
+- `GEMINI_RANKING_ENABLED` and `GEMINI_RANKING_MODEL`: optional model overlay for semantic ranking/explanations; deterministic ranking remains the fallback
 - `DATABASE_URL`, `REDIS_URL`, and MinIO settings: runtime infrastructure
 - `LIVE_PROVIDER_SMOKE`: opt-in live provider smoke tests
 

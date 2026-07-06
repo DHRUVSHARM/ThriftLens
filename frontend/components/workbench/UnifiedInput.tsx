@@ -15,7 +15,13 @@ type UnifiedInputProps = {
 };
 
 export function UnifiedInput(props: UnifiedInputProps) {
-  const placeholder = props.imageFile ? "What should ThriftLens focus on in this image?" : "Describe the product you want to find";
+  const hasImage = Boolean(props.imageFile);
+  const placeholder = hasImage
+    ? "Focus this image: the red shirt, the lamp on the left, navy wool blazer..."
+    : "Describe only the product: red leather tote bag, navy wool blazer, walnut desk lamp...";
+  const guidance = hasImage
+    ? "Use text to focus one visible item or add details from the image."
+    : "Describe the product itself. Requests to find, rank, list, or browse sources will ask for refinement.";
 
   return (
     <Panel elevated className="p-4 md:p-5">
@@ -24,7 +30,7 @@ export function UnifiedInput(props: UnifiedInputProps) {
 
         <div className="grid gap-3">
           <label className="grid gap-2">
-            <FieldLabel>{props.imageFile ? "Focus note" : "Product evidence"}</FieldLabel>
+            <FieldLabel>{hasImage ? "Focus note" : "Product evidence"}</FieldLabel>
             <textarea
               className="min-h-32 resize-y rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
               maxLength={2000}
@@ -39,7 +45,7 @@ export function UnifiedInput(props: UnifiedInputProps) {
 
         <div className="flex flex-col justify-between gap-3">
           <p className="text-sm leading-6 text-[var(--text-secondary)] lg:max-w-44">
-            Use text when the image is ambiguous, crowded, or you want ThriftLens to focus on one item.
+            {guidance}
           </p>
           <Button className="w-full" disabled={props.isSubmitting} padding="compact" type="submit" variant="primary">
             {props.isSubmitting ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Search size={18} aria-hidden="true" />}

@@ -12,6 +12,7 @@ x-backend-env: &backend-env
   GEMINI_EXTRACTION_MODEL: ${GEMINI_EXTRACTION_MODEL:-gemini-3.1-flash-lite}
   GEMINI_EXTRACTION_FALLBACK_MODEL: ${GEMINI_EXTRACTION_FALLBACK_MODEL:-gemini-3.5-flash}
   GEMINI_EXTRACTION_QUALITY_MODEL: ${GEMINI_EXTRACTION_QUALITY_MODEL:-gemini-3.5-flash}
+  GEMINI_TEXT_SAFETY_MODEL: ${GEMINI_TEXT_SAFETY_MODEL:-gemini-3.1-flash-lite}
   GEMINI_REPAIR_MODEL: ${GEMINI_REPAIR_MODEL:-gemini-3.1-flash-lite}
   GEMINI_RANKING_MODEL: ${GEMINI_RANKING_MODEL:-gemini-3.1-flash-lite}
   GEMINI_RANKING_ENABLED: ${GEMINI_RANKING_ENABLED:-false}
@@ -30,11 +31,24 @@ x-backend-env: &backend-env
   INPUT_GATE_TARGET_MATCH_CONFIDENCE: ${INPUT_GATE_TARGET_MATCH_CONFIDENCE:-0.70}
   INPUT_GATE_QUALITY_MODEL_CONFIDENCE: ${INPUT_GATE_QUALITY_MODEL_CONFIDENCE:-0.82}
   INPUT_GATE_MAX_PRODUCTS_WITHOUT_TARGET: ${INPUT_GATE_MAX_PRODUCTS_WITHOUT_TARGET:-1}
+  TEXT_SAFETY_MODEL_ENABLED: ${TEXT_SAFETY_MODEL_ENABLED:-false}
+  TEXT_SAFETY_MODEL_SAFE_THRESHOLD: ${TEXT_SAFETY_MODEL_SAFE_THRESHOLD:-0.74}
+  TEXT_SAFETY_MODEL_UNSAFE_THRESHOLD: ${TEXT_SAFETY_MODEL_UNSAFE_THRESHOLD:-0.68}
+  PRODUCT_UNDERSTANDING_AGENT_ENABLED: ${PRODUCT_UNDERSTANDING_AGENT_ENABLED:-false}
+  PRODUCT_UNDERSTANDING_MODEL: ${PRODUCT_UNDERSTANDING_MODEL:-}
+  PRODUCT_UNDERSTANDING_MAX_TOOL_CALLS: ${PRODUCT_UNDERSTANDING_MAX_TOOL_CALLS:-3}
+  EXTRACTION_MCP_URL: ${EXTRACTION_MCP_URL:-http://extraction-mcp:8001/mcp}
+  DISCOVERY_MCP_URL: ${DISCOVERY_MCP_URL:-http://discovery-mcp:8002/mcp}
+  DISCOVERY_MODEL: ${DISCOVERY_MODEL:-}
+  DISCOVERY_MAX_ENGINES: ${DISCOVERY_MAX_ENGINES:-3}
+  DISCOVERY_ENGINE_ALLOWLIST: ${DISCOVERY_ENGINE_ALLOWLIST:-google_shopping,google,bing_shopping,ebay,amazon,walmart,home_depot}
+  RANKING_MCP_URL: ${RANKING_MCP_URL:-http://ranking-mcp:8003/mcp}
   MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
   MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
   MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
   MINIO_BUCKET: ${MINIO_BUCKET:-thriftlens-uploads}
   OBJECT_STORAGE_FORCE_PATH_STYLE: ${OBJECT_STORAGE_FORCE_PATH_STYLE:-true}
+  OBJECT_STORAGE_SECURE: ${OBJECT_STORAGE_SECURE:-false}
   MAX_QUEUED_JOBS: ${MAX_QUEUED_JOBS:-50}
   MAX_ACTIVE_JOBS: ${MAX_ACTIVE_JOBS:-10}
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
@@ -89,12 +103,60 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
+      extraction-mcp:
+        condition: service_started
+      discovery-mcp:
+        condition: service_started
+      ranking-mcp:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+
+  extraction-mcp:
+    build:
+      context: ./backend
+    command: python -m app.mcp_servers.extraction.server
+    environment:
+      <<: *backend-env
+      MCP_SERVER_HOST: 0.0.0.0
+      MCP_SERVER_PORT: 8001
+      MCP_SERVER_PATH: /mcp
+      MCP_SERVER_TRANSPORT: streamable-http
+    volumes:
+      - ./backend:/app
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  discovery-mcp:
+    build:
+      context: ./backend
+    command: python -m app.mcp_servers.discovery.server
+    environment:
+      <<: *backend-env
+      MCP_SERVER_HOST: 0.0.0.0
+      MCP_SERVER_PORT: 8002
+      MCP_SERVER_PATH: /mcp
+      MCP_SERVER_TRANSPORT: streamable-http
+    volumes:
+      - ./backend:/app
+
+  ranking-mcp:
+    build:
+      context: ./backend
+    command: python -m app.mcp_servers.ranking.server
+    environment:
+      <<: *backend-env
+      MCP_SERVER_HOST: 0.0.0.0
+      MCP_SERVER_PORT: 8003
+      MCP_SERVER_PATH: /mcp
+      MCP_SERVER_TRANSPORT: streamable-http
+    volumes:
+      - ./backend:/app
 
   postgres:
     image: postgres:16-alpine

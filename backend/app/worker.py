@@ -1,14 +1,17 @@
+import logging
+
 from celery import Celery
 
+from app.agent.runner import run_agent_job
 from app.async_runtime import run_async
 from app.config import get_settings
 from app.health import collect_runtime_health
 from app.job_repository import mark_job_failed
 from app.logging_config import configure_secret_redaction_logging
-from app.workflow import run_research_workflow
 
 configure_secret_redaction_logging()
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "thriftlens",
@@ -31,9 +34,10 @@ def healthcheck() -> dict:
 @celery_app.task(name="process_research_job")
 def process_research_job(job_id: str) -> dict:
     try:
-        result = run_async(run_research_workflow(job_id))
+        result = run_async(run_agent_job(job_id))
         return result.model_dump(by_alias=True)
     except Exception:
+        logger.exception("Research worker failed unexpectedly for job %s", job_id)
         run_async(
             mark_job_failed(
                 job_id,

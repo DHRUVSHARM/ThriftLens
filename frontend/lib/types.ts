@@ -35,12 +35,34 @@ export type SourceProduct = {
   freshness?: string | null;
 };
 
+export type RankingScoreBreakdown = {
+  productTypeMatch?: number;
+  brandModelMatch?: number;
+  visualAttributeMatch?: number;
+  featureMatch?: number;
+  materialColorStyleMatch?: number;
+  pricePreferenceFit?: number;
+  sourceConfidence?: number;
+  availabilityConfidence?: number;
+  mismatchPenalty?: number;
+  finalScore?: number;
+};
+
+export type CandidateMismatch = {
+  code: string;
+  severity: "low" | "medium" | "high";
+  message: string;
+  evidence?: string[];
+};
+
 export type RankedProduct = {
   product: SourceProduct;
   score: number;
   group: "closest" | "cheaper" | "similar" | "premium" | "possible";
   confidence: "high" | "medium" | "low";
   reason: string;
+  scoreBreakdown?: RankingScoreBreakdown | null;
+  mismatches?: CandidateMismatch[];
 };
 
 export type ProductResearchBrief = {
@@ -54,6 +76,9 @@ export type ProductResearchBrief = {
   rankedProducts: RankedProduct[];
   rankingExplanation?: {
     summary?: string;
+    modelSummary?: string;
+    method?: string;
+    fallback?: string;
   } | null;
   userActions: string[];
   statusReason?: string | null;

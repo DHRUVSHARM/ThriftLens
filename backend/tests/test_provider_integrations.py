@@ -22,7 +22,7 @@ from app.serpapi_provider import (
 )
 from app.tool_policy import ToolExecutionPolicy
 from app.workflow import ResearchWorkflow
-from app.workflow_contracts import ProductReference, WorkflowProviderError
+from app.workflow_contracts import ImageSafetyResult, ProductReference, WorkflowProviderError
 
 
 @pytest.fixture
@@ -106,6 +106,23 @@ class ModelCapturingGeminiExtractionProvider(GeminiExtractionProvider):
         }
 
 
+class SafetyCapturingGeminiExtractionProvider(GeminiExtractionProvider):
+    def __init__(self, *, policy: object) -> None:
+        super().__init__(policy=policy)  # type: ignore[arg-type]
+        self.response_schemas: list[type] = []
+        self.prompts: list[str] = []
+
+    async def _call_gemini(self, **kwargs: object) -> dict:
+        self.response_schemas.append(kwargs["response_schema"])  # type: ignore[arg-type]
+        self.prompts.append(str(kwargs["prompt"]))
+        return {
+            "safetyStatus": "unsafe",
+            "unsafeReasons": ["sexual_content"],
+            "confidence": 0.89,
+            "userSafeMessage": "This image cannot be processed for product research. Please upload a clear product-only image.",
+        }
+
+
 class FallbackGeminiExtractionProvider(ModelCapturingGeminiExtractionProvider):
     async def _call_gemini_model(self, **kwargs: object) -> dict:
         model = str(kwargs["model"])
@@ -157,6 +174,37 @@ class FakeSearchTool:
                 }
             ]
         }
+
+
+class RecordingPolicy:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str]] = []
+
+    async def run(self, *, dependency: str, operation: str, call):  # type: ignore[no-untyped-def]
+        self.calls.append({"dependency": dependency, "operation": operation})
+        return await call()
+
+
+@pytest.mark.anyio
+async def test_gemini_image_safety_uses_dedicated_schema_and_operation(
+    clean_jobs: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = RecordingPolicy()
+    provider = SafetyCapturingGeminiExtractionProvider(policy=policy)
+    monkeypatch.setattr(provider.settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr("app.gemini_provider.download_research_image", lambda _: b"image-bytes")
+
+    output = await provider.screen_image_safety(
+        request_payload={"inputType": "image"},
+        image_metadata=[{"object_key": "uploads/test/image.png", "content_type": "image/png"}],
+    )
+
+    assert output["safetyStatus"] == "unsafe"
+    assert output["unsafeReasons"] == ["sexual_content"]
+    assert provider.response_schemas == [ImageSafetyResult]
+    assert "explicit sexual content" in provider.prompts[0]
+    assert policy.calls == [{"dependency": "gemini", "operation": "gemini_image_safety"}]
 
 
 @pytest.mark.anyio
@@ -356,7 +404,8 @@ async def test_serpapi_mcp_client_invokes_langchain_search_tool_with_allowed_par
         async def get_tools(self) -> list[FakeSearchTool]:
             return [search_tool]
 
-    provider = SerpApiMCPResearchProvider()
+    policy = RecordingPolicy()
+    provider = SerpApiMCPResearchProvider(policy=policy)  # type: ignore[arg-type]
     monkeypatch.setattr(provider.settings, "serpapi_api_key", "secret-serpapi-key")
     monkeypatch.setattr(provider.settings, "serpapi_max_calls_per_job", 1)
     monkeypatch.setattr("langchain_mcp_adapters.client.MultiServerMCPClient", FakeMCPClient)
@@ -385,6 +434,7 @@ async def test_serpapi_mcp_client_invokes_langchain_search_tool_with_allowed_par
     ]
     assert products[0]["title"] == "Minimal Black Desk Lamp"
     assert products[0]["price"] == 42.5
+    assert policy.calls == [{"dependency": "serpapi", "operation": "serpapi_research"}]
 
 
 def test_serpapi_results_normalize_source_backed_prices_and_unknown_missing_price() -> None:

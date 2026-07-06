@@ -87,6 +87,10 @@ export type ResearchStage = {
 };
 
 export type StageState = "waiting" | "active" | "complete" | "failed" | "skipped";
+export type ResearchSubstep = {
+  label: string;
+  state: StageState;
+};
 
 export const RESEARCH_STAGES: ResearchStage[] = [
   { id: "capture", label: "Capture", description: "Product evidence" },
@@ -95,6 +99,14 @@ export const RESEARCH_STAGES: ResearchStage[] = [
   { id: "compare", label: "Compare", description: "Candidate ranking" },
   { id: "brief", label: "Brief", description: "Research summary" },
 ];
+
+const RESEARCH_SUBSTEPS: Record<ResearchStage["id"], string[]> = {
+  capture: ["Evidence received", "Job queued", "Worker pickup"],
+  interpret: ["Safety screen", "Product clarity", "Reference extraction", "Reference saved"],
+  research: ["Product profile", "Search context", "Source plan", "Live source search", "Normalize results"],
+  compare: ["Candidate scores", "Mismatch checks", "Alternative groups", "Ranking explanation"],
+  brief: ["Build summary", "Ready for review"],
+};
 
 export function stageState(stageId: ResearchStage["id"], status?: JobStatus): StageState {
   if (!status) return "waiting";
@@ -120,6 +132,48 @@ export function stageState(stageId: ResearchStage["id"], status?: JobStatus): St
   if (stageId === active) return "active";
   if (activeIndex >= 0 && order < activeIndex) return "complete";
   return "waiting";
+}
+
+export function stageSubsteps(stageId: ResearchStage["id"], job?: ResearchJob | null): ResearchSubstep[] {
+  const labels = RESEARCH_SUBSTEPS[stageId];
+  const state = stageState(stageId, job?.status);
+  if (!job || state !== "active") return [];
+  const activeIndex = activeSubstepIndex(stageId, job);
+  return [{ label: labels[activeIndex], state: "active" }];
+}
+
+function activeSubstepIndex(stageId: ResearchStage["id"], job: ResearchJob): number {
+  const message = job.progressMessage.toLowerCase();
+  if (stageId === "capture") {
+    if (message.includes("queued")) return 1;
+    return 0;
+  }
+  if (stageId === "interpret") {
+    if (message.includes("screening")) return 0;
+    if (message.includes("clarity")) return 1;
+    if (message.includes("reference extracted") || message.includes("product reference extracted")) return 3;
+    if (message.includes("extracting")) return 2;
+    return 2;
+  }
+  if (stageId === "research") {
+    if (message.includes("strategy")) return 0;
+    if (message.includes("context")) return 1;
+    if (message.includes("planning")) return 2;
+    if (message.includes("searching")) return 3;
+    if (message.includes("normalizing")) return 4;
+    return 3;
+  }
+  if (stageId === "compare") {
+    if (message.includes("scoring")) return 0;
+    if (message.includes("mismatch")) return 1;
+    if (message.includes("grouping")) return 2;
+    if (message.includes("explanation")) return 3;
+    return 0;
+  }
+  if (stageId === "brief") {
+    return job.status === "complete" || job.status === "partial" ? 1 : 0;
+  }
+  return 0;
 }
 
 export function buildSummary(brief: ProductResearchBrief): string {

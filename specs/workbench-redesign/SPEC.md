@@ -116,6 +116,7 @@ Do not render raw provider errors, raw model output, secret-bearing URLs, or fak
 - Avoid decorative orbs, bokeh blobs, and marketing hero layouts.
 - Use subtle depth, crisp lines, compact typography, and precise spacing.
 - Product cards should feel inspectable and source-backed.
+- Product cards should show one concise selection reason by default. Repeated caveats that apply to every visible product should be shown once at the group/result level, not duplicated on every card. Longer reasoning may be available through a native title/accessibility hint, not an always-visible scroll area or custom floating panel.
 - Research stages should feel like an active pipeline, not a spinner.
 - Typography, spacing, and color tokens should be designed deliberately instead of relying on browser/system defaults.
 - Support light and dark themes, with a visible theme toggle.
@@ -260,8 +261,9 @@ Palette direction:
   - compact budget and preference controls
   - submit button
 - Textarea placeholder should respond to image state:
-  - no image: `Describe the product you want to find`
-  - image present: `What should ThriftLens focus on in this image?`
+  - no image: ask for product evidence only, for example `Describe only the product: red leather tote bag, navy wool blazer...`
+  - image present: ask for focus/refinement details tied to the image, for example `Focus this image: the red shirt, the lamp on the left...`
+- The helper text should make clear that requests to find, rank, list, browse, or use sources are not valid product evidence.
 - Image preview should support remove/replace.
 - If image ambiguity blocks research, preserve the uploaded image and prompt for target text.
 - The command deck should expand or collapse based on workflow state:
@@ -298,6 +300,16 @@ Each stage should support:
 - skipped
 
 Stage UI should show progress without implying exact timing. It should make long provider calls feel understandable.
+
+The active stage should show one compact current substate so long-running model and source calls do not feel stuck:
+
+- Capture: evidence received, job queued, worker pickup
+- Interpret: safety screen, product clarity, reference extraction, reference saved
+- Research: product profile, search context, source plan, live source search, normalize results
+- Compare: candidate scores, mismatch checks, alternative groups, ranking explanation
+- Brief: build summary, ready for review
+
+Substates should be derived from public job status/progress messages, not raw backend traces or provider payloads. Do not list every substep all the time; completed stages should rely on the checked stage heading.
 
 Stage copy should map backend states to user-friendly language:
 
@@ -385,6 +397,10 @@ Rules:
 - Unsafe image:
   - explain the image cannot be processed
   - ask for a clear product image instead
+- Regulated or dangerous product category:
+  - explain that the category cannot be researched in ThriftLens
+  - do not show source links, shopping links, or product cards
+  - ask the user to choose a standard consumer product
 - Research unavailable:
   - preserve product reference
   - explain source-backed search failed
@@ -438,7 +454,11 @@ Rationale:
 - Validate image type and size before submission.
 - Render image/focus text refinement for ambiguous inputs.
 - Render research pipeline stages from job status.
+- Render active research pipeline substates from job progress messages.
 - Render product reference, best match, grouped alternatives, possible matches, trust details, and copy/share.
+- Render product cards with a one-sentence selection reason and avoid visible scrollable prose blocks inside cards.
+- Suppress duplicated per-card caveats when the same caveat applies across the result set; show the shared caveat once near the grouped matches.
+- Render trust/evidence as plain user-facing prose; never render raw JSON-shaped model output.
 - Render a collapsed refine bar after terminal states with a path to re-open full inputs.
 - Render light/dark theme toggle and persist selected theme.
 - Stop polling terminal states.

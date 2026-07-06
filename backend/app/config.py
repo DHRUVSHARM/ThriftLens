@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     gemini_extraction_model: str = ""
     gemini_extraction_fallback_model: str = ""
     gemini_extraction_quality_model: str = ""
+    gemini_text_safety_model: str = ""
     gemini_repair_model: str = ""
     gemini_ranking_model: str = ""
     gemini_ranking_enabled: bool = False
@@ -43,6 +44,18 @@ class Settings(BaseSettings):
     input_gate_target_match_confidence: float = Field(default=0.70, ge=0, le=1)
     input_gate_quality_model_confidence: float = Field(default=0.82, ge=0, le=1)
     input_gate_max_products_without_target: int = Field(default=1, ge=1)
+    text_safety_model_enabled: bool = False
+    text_safety_model_safe_threshold: float = Field(default=0.74, ge=0, le=1)
+    text_safety_model_unsafe_threshold: float = Field(default=0.68, ge=0, le=1)
+    product_understanding_agent_enabled: bool = False
+    product_understanding_model: str = ""
+    product_understanding_max_tool_calls: int = Field(default=3, ge=1, le=5)
+    extraction_mcp_url: str = "http://extraction-mcp:8001/mcp"
+    discovery_mcp_url: str = "http://discovery-mcp:8002/mcp"
+    discovery_model: str = ""
+    discovery_max_engines: int = Field(default=3, ge=1, le=5)
+    discovery_engine_allowlist: str = "google_shopping,google,bing_shopping,ebay,amazon,walmart,home_depot"
+    ranking_mcp_url: str = "http://ranking-mcp:8003/mcp"
 
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = "minioadmin"
@@ -87,11 +100,23 @@ class Settings(BaseSettings):
     def gemini_extraction_quality_model_name(self) -> str:
         return self.gemini_extraction_quality_model.strip() or self.gemini_extraction_fallback_model_name() or self.gemini_extraction_model_name()
 
+    def gemini_text_safety_model_name(self) -> str:
+        return self.gemini_text_safety_model.strip() or self.gemini_extraction_model_name()
+
     def gemini_repair_model_name(self) -> str:
         return self.gemini_repair_model.strip() or self.gemini_extraction_model_name()
 
     def gemini_ranking_model_name(self) -> str:
         return self.gemini_ranking_model.strip() or self.gemini_extraction_model_name()
+
+    def product_understanding_model_name(self) -> str:
+        return self.product_understanding_model.strip() or self.gemini_extraction_model_name()
+
+    def discovery_model_name(self) -> str:
+        return self.discovery_model.strip() or self.gemini_extraction_model_name()
+
+    def discovery_allowed_engines(self) -> list[str]:
+        return [engine.strip() for engine in self.discovery_engine_allowlist.split(",") if engine.strip()]
 
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

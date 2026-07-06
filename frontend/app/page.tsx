@@ -224,10 +224,10 @@ function LandingIntro() {
 
           <div className="max-w-2xl pb-10">
             <h1 className="text-6xl font-semibold leading-[0.96] tracking-normal text-[var(--hero-text-primary)] md:text-7xl">
-              Find the product behind an image.
+              Research the product behind an image.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-[var(--hero-text-secondary)]">
-              Upload a photo, screenshot, or rough description. ThriftLens extracts a searchable reference, checks source-backed products, and organizes matches by price and confidence.
+              Upload a photo, screenshot, or rough description. ThriftLens extracts a product reference, decides how people shop for that item, searches live sources, and explains why each match was ranked.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--accent)] bg-[var(--accent)] px-4 text-[13px] font-semibold leading-5 text-[var(--accent-contrast)]" href="#workbench">
@@ -254,19 +254,19 @@ function HeroArchive() {
   const cards = [
     {
       title: "From a room photo",
-      meta: "detect the product to research",
+      meta: "focus the item before searching",
       src: "/assets/thriftlens-home-card.png",
       span: "lg:col-span-2",
     },
     {
       title: "From a rough reference",
-      meta: "turn words into a searchable brief",
+      meta: "extract product type and attributes",
       src: "/assets/thriftlens-gear-card.png",
       span: "",
     },
     {
-      title: "From similar alternatives",
-      meta: "compare source-backed matches",
+      title: "From live alternatives",
+      meta: "rank by evidence, price, and fit",
       src: "/assets/thriftlens-accessories-card.png",
       span: "",
     },
@@ -277,7 +277,7 @@ function HeroArchive() {
         <div>
           <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">Start with the clues you already have.</h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--text-secondary)]">
-            ThriftLens is built for the messy start: a photo from a room, a screenshot, or a few words. The app converts that into a structured reference and only then searches live sources.
+            ThriftLens is built for the messy start: a room photo, a screenshot, or a few words. It keeps the original evidence visible, extracts the product facts, and shows the search and ranking basis instead of hiding decisions in a black box.
           </p>
         </div>
         <a className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-[var(--border)] px-4 text-[13px] font-semibold text-[var(--text-primary)] hover:border-[var(--border-strong)]" href="#workbench">
@@ -317,33 +317,33 @@ function ProcessNarrative() {
   const steps = [
     {
       icon: <Camera size={17} aria-hidden="true" />,
-      title: "Add evidence",
-      text: "Start with image, text, or image plus text when the picture contains more than one possible product.",
+      title: "Capture product evidence",
+      text: "Start with an image, a description, or both. A focus note helps when the photo contains several possible products.",
     },
     {
       icon: <ShieldCheck size={17} aria-hidden="true" />,
-      title: "Gate the input",
-      text: "The vision pass rejects unsafe, non-product, or ambiguous inputs instead of guessing silently.",
+      title: "Check safety and clarity",
+      text: "The vision gate blocks unsafe inputs and asks for refinement when the image is non-product, crowded, or too ambiguous.",
     },
     {
       icon: <Sparkles size={17} aria-hidden="true" />,
-      title: "Extract reference",
-      text: "A structured product reference captures category, visible attributes, constraints, and confidence.",
+      title: "Build the product profile",
+      text: "Extraction turns the evidence into product type, color, material, features, assumptions, and confidence.",
     },
     {
       icon: <Search size={17} aria-hidden="true" />,
-      title: "Search sources",
-      text: "Research providers fetch source-backed products and prices through the same provider contract.",
+      title: "Plan source research",
+      text: "Discovery chooses exact-match and alternatives searches from allowed providers, using the product family and shopper priorities.",
     },
     {
       icon: <Layers size={17} aria-hidden="true" />,
-      title: "Rank and group",
-      text: "Deterministic scoring separates closest candidates from lower priced, similar price, and higher-end options.",
+      title: "Rank with visible evidence",
+      text: "Ranking combines source data, extracted details, mismatch checks, and optional model judgment into grouped matches.",
     },
     {
       icon: <SlidersHorizontal size={17} aria-hidden="true" />,
-      title: "Refine when needed",
-      text: "When confidence is low, the product asks for better evidence instead of presenting a fabricated answer.",
+      title: "Show the basis",
+      text: "The brief shows product signals, search strategy, ranking priorities, caveats, prices, and source links.",
     },
   ];
 
@@ -352,7 +352,7 @@ function ProcessNarrative() {
       <div className="lg:sticky lg:top-8">
         <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">How ThriftLens keeps results grounded.</h2>
         <p className="mt-4 max-w-xl text-base leading-7 text-[var(--text-secondary)]">
-          The technical shape is part of the product: vision gating, structured extraction, source-backed research, deterministic grouping, and clear retry or refinement states.
+          The technical shape is part of the product: safety and product gates, structured extraction, product-aware search planning, hybrid ranking, source links, and clear retry or refinement states.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

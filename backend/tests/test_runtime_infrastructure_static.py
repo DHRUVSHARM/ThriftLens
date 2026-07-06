@@ -50,6 +50,15 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "INPUT_GATE_TARGET_MATCH_CONFIDENCE",
             "INPUT_GATE_QUALITY_MODEL_CONFIDENCE",
             "INPUT_GATE_MAX_PRODUCTS_WITHOUT_TARGET",
+            "PRODUCT_UNDERSTANDING_AGENT_ENABLED",
+            "PRODUCT_UNDERSTANDING_MODEL",
+            "PRODUCT_UNDERSTANDING_MAX_TOOL_CALLS",
+            "EXTRACTION_MCP_URL",
+            "DISCOVERY_MCP_URL",
+            "DISCOVERY_MODEL",
+            "DISCOVERY_MAX_ENGINES",
+            "DISCOVERY_ENGINE_ALLOWLIST",
+            "RANKING_MCP_URL",
             "MINIO_ENDPOINT",
             "MINIO_ACCESS_KEY",
             "MINIO_SECRET_KEY",
@@ -74,6 +83,9 @@ class RuntimeInfrastructureStaticTests(TestCase):
             "frontend",
             "api",
             "worker",
+            "extraction-mcp",
+            "discovery-mcp",
+            "ranking-mcp",
             "postgres",
             "redis",
             "minio",
@@ -103,6 +115,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("partial_brief JSONB", schema)
         self.assertIn("final_brief JSONB", schema)
         self.assertIn("safe_error JSONB", schema)
+        self.assertIn("metadata JSONB", schema)
         self.assertIn("object_key TEXT NOT NULL", schema)
         self.assertIn("checksum TEXT", schema)
 

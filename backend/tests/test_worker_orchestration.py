@@ -39,6 +39,9 @@ async def client() -> AsyncClient:
 
 async def _clear_jobs() -> None:
     async with engine.begin() as connection:
+        await connection.execute(text("DELETE FROM dependency_health"))
+        await connection.execute(text("DELETE FROM job_attempts"))
+        await connection.execute(text("DELETE FROM uploaded_images"))
         await connection.execute(text("DELETE FROM research_jobs"))
 
 
@@ -254,7 +257,10 @@ async def test_multi_product_image_without_target_needs_refinement(client: Async
 
     assert result.status == "needs_refinement"
     assert job["safe_error"]["code"] == "ambiguous_image"
-    assert job["safe_error"]["message"] == "Multiple products were detected. Add a focus note or crop the image to one product."
+    assert job["safe_error"]["message"] == (
+        "Multiple products or objects were detected. Add a short focus note, such as the item type, color, or location, "
+        "or crop the image to one product."
+    )
     assert extraction_provider.extract_called is False
     assert research_provider.calls == 0
 
@@ -484,7 +490,7 @@ async def test_worker_fallback_marks_unexpected_crash_failed_retryable(client: A
             }
         )
 
-    monkeypatch.setattr("app.worker.run_research_workflow", fail_workflow)
+    monkeypatch.setattr("app.worker.run_agent_job", fail_workflow)
     monkeypatch.setattr("app.worker.mark_job_failed", fake_mark_job_failed)
 
     result = process_research_job.run(job_id)
