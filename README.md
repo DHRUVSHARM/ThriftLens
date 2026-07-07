@@ -1,5 +1,12 @@
 # Luma Take-Home
 
+
+# I have edited the README the contents are divided as follows now :
+
+1) Original README - This is the one provided by luma
+2) ThriftLens Product README - This README contains the answers to questions, deliverables links or folder paths, and other documentation location
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## 1. Original README Provided
 
 Modern engineering is about directing leverage — tools, judgment, taste — toward real outcomes. This take-home is designed around that.
@@ -72,8 +79,6 @@ Build your solution directly in this repo. It should run. Include setup instruct
 
 A `.env.example` is included with stub keys for providers we have accounts with (Anthropic, OpenAI, ElevenLabs, Google Cloud, AWS). Copy it to `.env`, use whichever keys your solution needs, and document any others.
 
-**ThriftLens status:** Complete locally. The app runs with `docker compose up --build`; setup and verification commands are in the ThriftLens README section below. Live deployment URL is tracked in `APPROACH.md` and should be filled once deployed. `.env.example` documents the required Gemini/Google and SerpAPI keys with safe placeholders.
-
 #### 2. APPROACH.md
 
 - What you built and why you picked this problem
@@ -82,23 +87,17 @@ A `.env.example` is included with stub keys for providers we have accounts with 
 - What breaks first under pressure
 - What you'd build next
 
-**ThriftLens status:** Complete in `APPROACH.md`. It covers product choice, architecture decisions, AI integration, tradeoffs, omitted scope, pressure points, verification, and next steps.
-
 #### 3. Video walkthrough
 
 Record a short video (~5 minutes) showing what you built. Demo the key flows — whether that's a UI walkthrough, a CLI session, or hitting your API — explain your decisions, and highlight anything you're particularly proud of. This is your chance to show us the experience through your eyes.
 
 **Paste your video link (Loom, Google Drive, YouTube, etc.) into `video.md`.**
 
-**ThriftLens status:** Pending final link. Add the walkthrough URL to `video.md` before submission.
-
 #### 4. AI session history
 
 Your AI session logs (Claude Code, Codex, Cursor) are packaged automatically when you run `./submit.sh`. If you used other AI tools (ChatGPT, etc.), export those conversations and include them in your repo before submitting.
 
 This is a required deliverable. We review your AI interaction to understand how you work — how you plan, iterate, and direct the tools.
-
-**ThriftLens status:** Covered by `./submit.sh`, which packages the AI session history during final submission.
 
 ---
 
@@ -131,186 +130,103 @@ When you're ready, run the submit script from your repo root:
 This handles everything: packages your AI session history, commits and pushes your latest changes, grants reviewer access, and registers your submission. You'll see a confirmation when it's done.
 
 ---
+-
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 ## 2. ThriftLens Product README
 
-ThriftLens is an AI product research workbench. Give it product evidence from an upload, camera capture, text description, or image plus focus note, and it extracts a structured product reference, searches live source-backed candidates, ranks the matches, and explains uncertainty without pretending it found more evidence than it did.
+1) problem selected
 
-The app is built for the Luma take-home option 2: a deployable mini-app where AI does meaningful work in the core feature.
+I have selected the problem below for the take home :
 
-### What It Does
+#### 2. Build the Mini-App You'd Actually Use
 
-- Captures product evidence from image upload, browser camera, text, or image plus text refinement.
-- Screens unsafe content, prompt-injection intent, non-product requests, and ambiguous product evidence.
-- Extracts a structured product reference with product type, visual attributes, assumptions, and confidence.
-- Profiles the product category and shopper priorities before search.
-- Searches source-backed product results through SerpAPI MCP.
-- Normalizes only product-shaped source results before rendering.
-- Ranks candidates with deterministic signals plus optional model-assisted explanations.
-- Shows grouped alternatives, price context, caveats, source links, copyable brief text, and partial/failure states.
-- Retains uploaded images privately for a bounded TTL, then cleans them up with Celery Beat.
+**ThriftLens concept summary:** ThriftLens is a source-backed product research app for moments when a user has product evidence but not a clean product name. The user can upload an image, take a camera photo, describe a product in text, or combine image + text to focus the system on one item. ThriftLens then turns that messy evidence into a structured product reference, searches live product sources, ranks candidate matches, and explains the result with source links, caveats, and price context.
 
-### Stack
+AI is central to the product rather than added as a chat sidebar. The app uses a graph-based workflow to perceive the input, decide whether it is safe and product-focused, extract the product reference, plan source searches, call MCP tools, normalize product results, and rank matches. The graph keeps the top-level flow controlled and reviewable, while model-driven steps handle ambiguous product understanding, search planning, and match explanation where fixed rules would be too brittle.
 
-- `frontend`: Next.js workbench and landing experience
-- `api`: FastAPI job gateway
-- `worker`: Celery worker running the LangGraph-style product research flow
-- `beat`: Celery Beat scheduler for uploaded-image cleanup
-- `extraction-mcp`: FastMCP product extraction service
-- `discovery-mcp`: FastMCP product discovery/search planning service
-- `ranking-mcp`: FastMCP ranking and explanation service
-- `postgres`: durable job/result state
-- `redis`: Celery broker/cache
-- `minio`: temporary private uploaded-image object storage
+**Why this is worth opening twice:** The product is designed around a recurring, real behavior: people see products in screenshots, marketplace posts, rooms, outfits, shared photos, and store shelves, but often do not know the exact name or where to compare similar options. ThriftLens makes that moment actionable. A user can drop in a shared image, take a quick photo, or add a short focus note like “the lamp on the left” or “the red shirt,” then get source-backed matches and alternatives.
 
-### Quick Start
+The repeat value comes from exploration and discovery. Each input can reveal products the user would not have known how to search for directly: similar alternatives, cheaper options, premium versions, adjacent styles, and caveats about why something is or is not a strong match. ThriftLens is not just answering one fixed shopping query; it gives users a way to turn visual curiosity into product research they can inspect, refine, compare, and use to discover newer products they might not have considered.
+
+
+2) Deliverables as mentioned in the README
+
+#### 1. Working software
+
+Build your solution directly in this repo. It should run. Include setup instructions that work in a fresh Linux container — we will run your code in one during review. If you use Docker, provide a `docker-compose.yml` for one-command setup.
+
+**ThriftLens status:** Complete. The app runs from the root `docker-compose.yml` with the production-like service split: frontend, FastAPI API, Celery worker, Celery Beat cleanup scheduler, Postgres, Redis, MinIO, and the three MCP services for extraction, discovery, and ranking.
+
+For a fresh local run:
 
 ```bash
 cp .env.example .env
-docker compose up --build
 ```
 
-Open:
+Then open `.env` and add the two required live-provider keys:
 
-- Frontend: http://localhost:3000
-- API health: http://localhost:8000/api/health
-- API liveness: http://localhost:8000/api/live
-- MinIO console: http://localhost:9001
+- `GEMINI_API_KEY`: used for image safety, product extraction, product understanding, and ranking explanations.
+- `SERPAPI_API_KEY`: used for source-backed product research through SerpAPI MCP.
 
-The checked-in `.env.example` is configured for `REAL_MODE` so reviewers can copy it, add provider keys, and test the live path. For a no-key local demo, set:
-
-```env
-PROVIDER_MODE=SAMPLE_MODE
-```
-
-### Required Provider Keys For Live Mode
-
-For `REAL_MODE`, fill in:
-
-```env
-SERPAPI_API_KEY=
-GEMINI_API_KEY=
-```
-
-One Gemini-compatible key is enough. The app supports `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or the starter-template `GOOGLE_CLOUD_API_KEY`.
-
-Provider sources:
+`.env.example` documents where to get both keys:
 
 - Gemini / Google AI Studio: https://aistudio.google.com/app/apikey
-- SerpAPI: https://serpapi.com/manage-api-key
+- SerpAPI dashboard: https://serpapi.com/manage-api-key
 
-Do not commit real secrets in `.env`.
-
-### Useful Commands
+After adding the keys:
 
 ```bash
-# Validate compose config
-docker compose config --quiet
-
-# Run backend tests inside the API container
-docker compose exec api python -m pytest tests
-
-# Run frontend build
-docker compose run --rm frontend npm run build
-
-# Run Playwright checks
-docker compose --profile test run --rm frontend-e2e
-```
-
-If the stack is not already running, start it first:
-
-```bash
+docker compose down
 docker compose up --build
 ```
 
-### Important Environment Variables
+Then open:
 
-All variables are documented in `.env.example`. The most important ones are:
+- Web app: http://localhost:3000
+- API health: http://localhost:8000/api/health
+- MinIO console: http://localhost:9001
 
-- `PROVIDER_MODE`: `SAMPLE_MODE`, `TEST_MODE`, or `REAL_MODE`
-- `NEXT_PUBLIC_API_BASE_URL`: browser-facing API URL
-- `CORS_ALLOWED_ORIGINS`: allowed frontend origins for the API
-- `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_CLOUD_API_KEY`: Gemini-compatible live model key
-- `SERPAPI_API_KEY`: live source research key
-- `SERPAPI_TIMEOUT_SECONDS`: search-specific timeout for slow live shopping providers
-- `TEXT_SAFETY_MODEL_ENABLED`: enables structured model-assisted text safety classification
-- `PRODUCT_UNDERSTANDING_AGENT_ENABLED`: enables bounded product-understanding model flow
-- `DISCOVERY_MODEL`: model for product profile and search planning
-- `GEMINI_RANKING_ENABLED`: enables optional model-assisted ranking explanations
-- `DATABASE_URL`, `REDIS_URL`, and MinIO settings: runtime services
-- `MAX_UPLOAD_MB`, `MAX_TEXT_LENGTH`, `MAX_QUEUED_JOBS`, `MAX_ACTIVE_JOBS`: intake bounds
-- `IMAGE_RETENTION_SECONDS`, `IMAGE_CLEANUP_BATCH_SIZE`, `IMAGE_CLEANUP_INTERVAL_SECONDS`: private image retention cleanup
+For a no-key smoke demo, set `PROVIDER_MODE=SAMPLE_MODE`, but the intended review path is `REAL_MODE` with `GEMINI_API_KEY` and `SERPAPI_API_KEY`.
 
-### Image Retention
+**If your project is deployable, deploy it.** We want to experience what you built, not just read about it. A live URL — whether it's a web app, an API endpoint, or a hosted service — goes a long way. Vercel, Railway, Fly, a VPS, whatever works. Include the URL in your APPROACH.md.
 
-Uploaded and camera-captured images are stored privately in MinIO for a bounded retention window, defaulting to 21,600 seconds, or 6 hours. Celery Beat schedules `cleanup_expired_images`, which removes expired MinIO objects and their `uploaded_images` metadata rows.
+**ThriftLens deployment status:** Deployed on Render.
 
-Unsafe images follow the same TTL policy as normal images; once blocked, they are not sent to downstream research.
+- Live web app: https://thriftlens-web.onrender.com/
+- API health check: https://thriftlens-api.onrender.com/api/health
 
-For local cleanup smoke tests, temporarily set:
+The Render deployment is managed through the root `render.yaml` Blueprint and uses the same production-shaped service split as local Docker Compose: public Next.js frontend, public FastAPI API, Celery worker, Celery Beat cleanup scheduler, private MCP services for extraction/discovery/ranking, Render Postgres, Render Key Value for the queue, and private MinIO object storage.
 
-```env
-IMAGE_RETENTION_SECONDS=72
-```
+A `.env.example` is included with stub keys for providers we have accounts with (Anthropic, OpenAI, ElevenLabs, Google Cloud, AWS). Copy it to `.env`, use whichever keys your solution needs, and document any others.
 
-### Demo Flow
+**ThriftLens environment status:** Complete. `.env.example` includes inline notes for every environment variable used by the local Docker Compose setup. For live `REAL_MODE` testing, reviewers only need to provide `GEMINI_API_KEY` and `SERPAPI_API_KEY`; the file also notes where to get both provider keys.
 
-Good review scenarios:
+#### 2. APPROACH.md
 
-1. Text-only: `red leather tote bag`
-2. Text-only intent guard: `find the top 10 red bags from Amazon`
-3. Image-only: upload or capture a clear single product photo.
-4. Image plus focus note: upload a crowded product scene and specify the target item.
-5. Unsafe or regulated input: confirm the app blocks before source search.
-6. Provider/source failure: confirm the app shows a partial or retryable safe state without fake product cards.
+- What you built and why you picked this problem
+- Key decisions and tradeoffs
+- What you intentionally left out
+- What breaks first under pressure
+- What you'd build next
 
-### Deployment
+**ThriftLens status:** Complete in `APPROACH.md`. It covers product choice, architecture decisions, AI integration, tradeoffs, omitted scope, pressure points, verification, and next steps.
 
-The app is Docker Compose-ready and includes a Render Blueprint in `render.yaml` for the same production-shaped service split:
+#### 3. Video walkthrough
 
-- web frontend
-- FastAPI API
-- Celery worker
-- Celery Beat scheduler
-- Extraction MCP service
-- Discovery MCP service
-- Ranking MCP service
-- Postgres
-- Redis or managed queue
-- S3-compatible object storage
+Record a short video (~5 minutes) showing what you built. Demo the key flows — whether that's a UI walkthrough, a CLI session, or hitting your API — explain your decisions, and highlight anything you're particularly proud of. This is your chance to show us the experience through your eyes.
 
-The Render deployment uses:
+**Paste your video link (Loom, Google Drive, YouTube, etc.) into `video.md`.**
 
-- `thriftlens-web`: public Next.js web service
-- `thriftlens-api`: public FastAPI web service
-- `thriftlens-worker`: Celery worker
-- `thriftlens-beat`: Celery Beat cleanup scheduler
-- `thriftlens-extraction-mcp`, `thriftlens-discovery-mcp`, `thriftlens-ranking-mcp`: private MCP services
-- `thriftlens-postgres`: Render Postgres
-- `thriftlens-redis`: Render Key Value
-- `thriftlens-minio`: private MinIO service with persistent disk
+**ThriftLens status:** Pending final link. Add the walkthrough URL to `video.md` before submission.
 
-Render setup notes:
+#### 4. AI session history
 
-1. Create the Blueprint from `render.yaml`.
-2. Fill secret dashboard values for `GEMINI_API_KEY` or `GOOGLE_CLOUD_API_KEY` and `SERPAPI_API_KEY`.
-   If a provider key is rotated before a demo, update the existing Render environment group value and redeploy the API, worker, and MCP services that use it. Do not edit `render.yaml` with real keys.
-3. After Render creates public URLs, set `NEXT_PUBLIC_API_BASE_URL` on `thriftlens-web` to the public API URL. `CORS_ALLOWED_ORIGINS` is committed in `render.yaml` for the deployed web URL plus local development origins.
-4. Redeploy `thriftlens-web` after changing `NEXT_PUBLIC_API_BASE_URL`, because the browser-facing API URL is baked into the Next.js build.
-5. Keep camera capture behind HTTPS; Render public services provide HTTPS by default.
-6. Render probes `/api/live` for lightweight API liveness; use `/api/health` for full Postgres, Redis, MinIO, and provider-key diagnostics.
+Your AI session logs (Claude Code, Codex, Cursor) are packaged automatically when you run `./submit.sh`. If you used other AI tools (ChatGPT, etc.), export those conversations and include them in your repo before submitting.
 
-Local Docker Compose remains the fallback review path. `minio-init` is still used locally, while deployed services also create the MinIO bucket idempotently from the app storage layer.
+This is a required deliverable. We review your AI interaction to understand how you work — how you plan, iterate, and direct the tools.
 
-### Submission
-
-Before submitting:
-
-1. Add the deployed URL to `APPROACH.md` if deployed.
-2. Add the walkthrough video link to `video.md`.
-3. Run the final smoke checks above.
-4. Run:
-
-```bash
-./submit.sh
-```
+**ThriftLens status:** Covered by `./submit.sh`, which packages the AI session history during final submission.
