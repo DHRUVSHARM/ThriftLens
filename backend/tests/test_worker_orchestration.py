@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -501,6 +503,41 @@ async def test_worker_fallback_marks_unexpected_crash_failed_retryable(client: A
             "job_id": job_id,
             "code": "worker_task_failed",
             "message": "Research worker failed unexpectedly. Try again.",
+            "retryable": True,
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_worker_timeout_marks_job_failed_retryable(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    job_id = "worker-timeout-job"
+    failed_jobs: list[dict[str, object]] = []
+
+    async def slow_workflow(_: str) -> None:
+        await asyncio.sleep(60)
+
+    async def fake_mark_job_failed(job_id: str, *, code: str, message: str, retryable: bool) -> None:
+        failed_jobs.append(
+            {
+                "job_id": job_id,
+                "code": code,
+                "message": message,
+                "retryable": retryable,
+            }
+        )
+
+    monkeypatch.setattr("app.worker.WORKER_RUN_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr("app.worker.run_agent_job", slow_workflow)
+    monkeypatch.setattr("app.worker.mark_job_failed", fake_mark_job_failed)
+
+    result = process_research_job.run(job_id)
+
+    assert result == {"jobId": job_id, "status": "failed"}
+    assert failed_jobs == [
+        {
+            "job_id": job_id,
+            "code": "worker_task_timeout",
+            "message": "Research took too long. Try again with clearer product evidence.",
             "retryable": True,
         }
     ]

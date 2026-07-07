@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Coroutine
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from threading import Lock, Thread
 from typing import Any, TypeVar
 
@@ -25,6 +26,13 @@ def _get_loop() -> asyncio.AbstractEventLoop:
         return _loop
 
 
-def run_async(coro: Coroutine[Any, Any, T]) -> T:
+def run_async(coro: Coroutine[Any, Any, T], *, timeout: float | None = None) -> T:
     future = asyncio.run_coroutine_threadsafe(coro, _get_loop())
-    return future.result()
+    try:
+        return future.result(timeout=timeout)
+    except FutureTimeoutError:
+        future.cancel()
+        raise
+    except BaseException:
+        future.cancel()
+        raise
