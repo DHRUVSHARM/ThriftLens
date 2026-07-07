@@ -1,5 +1,7 @@
 # ThriftLens Approach
 
+# IMP note : the mermaid flow diagrams are best viewed on Github / .md viewer
+
 ## 1. What I Built And Why I Picked This Problem
 
 ### Product
@@ -112,6 +114,21 @@ Manual scenario testing covered:
 - MinIO retention cleanup using a short test TTL before restoring the default six-hour TTL.
 
 What exists today is a practical regression suite plus a manual scenario checklist. What I did not build yet is a formal evaluation harness with scored fixtures for expected extraction fields, blocked-input classifications, and ranking outputs across a fixed benchmark set.
+
+### Development Workflow Overview
+
+The development process was intentionally agent-directed but spec-controlled. `AGENTS.md` defines the working rules for this repo: preserve secrets, keep `.env.example` documented, prefer small complete slices, use specs before implementation, and verify behavior before marking a feature complete.
+
+The main loop was:
+
+1. **Spec Architect pass:** define or refine the feature in `/specs`, including objective, behavior, acceptance criteria, error states, and out-of-scope boundaries.
+2. **Software Engineer pass:** implement the smallest useful slice, wire it into the existing FastAPI/Celery/LangGraph/MCP/frontend boundaries, and add tests for the acceptance criteria.
+3. **Review Agent pass:** compare implementation against the spec, note gaps in a `REVIEW*.md` file where useful, and tighten behavior or docs before moving on.
+4. **Manual product review:** run the app locally or on Render, test realistic product scenarios, and use those observations to refine UI, copy, safety gates, ranking output, and deployment settings.
+
+This workflow is visible in the repo through the feature specs, review notes, targeted backend tests, frontend smoke tests, `.env.example` synchronization, and the staged implementation of runtime infrastructure, provider resilience, MCP servers, ranking, workbench redesign, camera capture, cleanup, and Render deployment.
+
+Skills were used as guardrails rather than as a replacement for review. The `uncodixfy` UI skill helped steer the frontend away from generic dashboard patterns during the workbench and landing-page polish. The spec-driven workflow and cleanup guidance kept feature work scoped around acceptance criteria, maintainable boundaries, and reviewer-run commands.
 
 ## 2. Key Decisions And Tradeoffs
 
@@ -299,6 +316,12 @@ flowchart TD
 
 The deterministic layer gives every candidate a stable baseline and fallback. The prompt-driven layer improves semantic judgment and user-facing reasoning, but it can only use the extracted reference, product profile, search context, source product fields, and deterministic score breakdowns. If the ranking model fails or returns unusable output, the deterministic ranked list still ships.
 
+### Live Research Latency Tradeoff
+
+The slowest step in the current product is live source research through SerpAPI-backed search. That is an intentional tradeoff for this take-home. ThriftLens is trying to demonstrate the full end-to-end agent research loop: product understanding, source planning, live discovery, normalization, ranking, caveats, and explanation. Live source scrape/search results give better result diversity and help with lesser-known products, but they cost latency.
+
+I chose that accuracy and coverage tradeoff over making the research step feel instant with only cached fixtures or a narrow catalog. The app mitigates the wait with progress states, timeouts, partial results, safe provider failures, and conservative rendering. The bottleneck remains real, especially when the search plan runs multiple source queries or upstream search is slow.
+
 ### Other Decisions
 
 - **SerpAPI first:** SerpAPI hosted MCP gave the fastest reliable path to source-backed shopping/search results. It is the first discovery provider, not the only possible one.
@@ -405,7 +428,9 @@ The next technical focus would be formal evaluation and a more model-agnostic ag
 - Move more provider-specific code behind model-agnostic interfaces so Gemini, OpenAI, Anthropic, or future Luma-hosted models can be swapped or routed per task.
 - Add model routing policies that choose lighter models for low-risk extraction/repair and stronger models for ambiguous visual reasoning or high-impact ranking.
 - Add more discovery providers behind the Discovery MCP server while keeping the graph’s tool allowlist and product-shaped normalization.
-- Run source searches concurrently with bounded parallelism where provider limits allow it.
+- Add RAG-backed product/category knowledge bases for faster common-product lookup before live search, while still using live sources for freshness and price evidence.
+- Run source searches concurrently with bounded parallelism where provider limits allow it, recognizing that parallelism helps but does not remove upstream scrape/search latency.
+- Restrict deep nesting of source results and follow-up lookups so the research step remains bounded even when a provider returns rich but slow result trees.
 - Add a dedicated observability MCP server or trace service for long-running agent flows, with redacted node/tool spans, provider timings, circuit-breaker state, and ranking explanations.
 
 That would make future prompt/model/provider changes safer because they could be compared against stable expected outcomes instead of only ad hoc manual review.

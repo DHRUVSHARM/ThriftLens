@@ -213,7 +213,7 @@ A `.env.example` is included with stub keys for providers we have accounts with 
 - What breaks first under pressure
 - What you'd build next
 
-**ThriftLens status:** Complete in `APPROACH.md`. It covers product choice, architecture decisions, AI integration, tradeoffs, omitted scope, pressure points, verification, and next steps.
+**ThriftLens status:** Complete in `APPROACH.md`. It covers product choice, architecture decisions, AI integration, tradeoffs, omitted scope, pressure points, verification, and next steps. It also includes a development workflow overview that summarizes the `AGENTS.md` guidance, spec/SWE/review loop, skills used, test coverage approach, and manual review process.
 
 #### 3. Video walkthrough
 
@@ -229,4 +229,4 @@ Your AI session logs (Claude Code, Codex, Cursor) are packaged automatically whe
 
 This is a required deliverable. We review your AI interaction to understand how you work — how you plan, iterate, and direct the tools.
 
-**ThriftLens status:** Covered by `./submit.sh`, which packages the AI session history during final submission.
+**ThriftLens status:** Covered by `./submit.sh`, which packages the AI session history during final submission. For a reviewer-friendly summary of how the AI workflow was directed, see the development workflow overview in `APPROACH.md`; the raw session history provides the detailed iteration trail.
