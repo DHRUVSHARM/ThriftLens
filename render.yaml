@@ -313,7 +313,7 @@ services:
     name: thriftlens-discovery-mcp
     runtime: docker
     region: oregon
-    plan: starter
+    plan: standard
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     dockerCommand: python -m app.mcp_servers.discovery.server
