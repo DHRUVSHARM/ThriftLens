@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.product_understanding import ProductUnderstandingAgent
+from app.config import get_settings
 from app.job_repository import (
     get_research_job,
     get_uploaded_images,
@@ -32,6 +33,7 @@ from app.workflow_contracts import (
     ProductSearchContext,
     ProductSearchExecutionResult,
     ProductSearchPlan,
+    ProductSearchPlanItem,
     ProductUnderstandingDecision,
     RankedProduct,
     SourceProduct,
@@ -448,6 +450,9 @@ def execute_search_plan_node(discovery_client_factory: DiscoveryClientFactory):
         job_id = state["job_id"]
         reference = ProductReference.model_validate(state["product_reference"])
         plan = ProductSearchPlan.model_validate(state["product_search_plan"])
+        settings = get_settings()
+        planned_items = plan.plan_items[: settings.serpapi_max_calls_per_job]
+        planned_count = len(planned_items)
         await update_job_stage(job_id, status="researching_sources", progress_message="Searching source-backed products.")
         await record_job_attempt(
             job_id=job_id,
@@ -455,13 +460,32 @@ def execute_search_plan_node(discovery_client_factory: DiscoveryClientFactory):
             dependency="discovery-mcp",
             attempt=1,
             metadata={
-                "plannedCallCount": len(plan.plan_items),
-                "plannedEngines": [item.engine for item in plan.plan_items],
-                "plannedIntents": [item.intent for item in plan.plan_items],
+                "plannedCallCount": planned_count,
+                "plannedEngines": [item.engine for item in planned_items],
+                "plannedIntents": [item.intent for item in planned_items],
             },
         )
         try:
-            results = await discovery_client_factory().execute_search_plan(search_plan=plan)
+            raw_results = []
+            source_errors = []
+            discovery_client = discovery_client_factory()
+            for index, item in enumerate(planned_items, start=1):
+                await update_job_stage(
+                    job_id,
+                    status="researching_sources",
+                    progress_message=_source_search_progress_message(item, index, planned_count),
+                )
+                single_item_plan = ProductSearchPlan(
+                    planItems=[item],
+                    selectedEngines=plan.selected_engines,
+                    reasoning=plan.reasoning,
+                    fallbackUsed=plan.fallback_used,
+                )
+                result = await discovery_client.execute_search_plan(search_plan=single_item_plan)
+                raw_results.extend(result.raw_results)
+                source_errors.extend(result.source_errors)
+
+            results = ProductSearchExecutionResult(rawResults=raw_results, sourceErrors=source_errors)
             if not results.raw_results and results.source_errors:
                 error = results.source_errors[0]
                 return await _partial_discovery_job(
@@ -475,6 +499,27 @@ def execute_search_plan_node(discovery_client_factory: DiscoveryClientFactory):
             return await _partial_discovery_job(job_id, reference, exc, stage="executeSearchPlan")
 
     return node
+
+
+def _source_search_progress_message(item: ProductSearchPlanItem, index: int, total: int) -> str:
+    source = _source_label(item.engine)
+    intent = item.intent.replace("_", " ")
+    if total <= 1:
+        return f"Searching {source} for {intent}."
+    return f"Searching {source} for {intent} ({index}/{total})."
+
+
+def _source_label(engine: str) -> str:
+    labels = {
+        "google_shopping": "Google Shopping",
+        "google": "Google",
+        "bing_shopping": "Bing Shopping",
+        "ebay": "eBay",
+        "amazon": "Amazon",
+        "walmart": "Walmart",
+        "home_depot": "Home Depot",
+    }
+    return labels.get(engine, engine.replace("_", " ").title())
 
 
 def normalize_products_node(discovery_client_factory: DiscoveryClientFactory):

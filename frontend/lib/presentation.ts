@@ -138,8 +138,17 @@ export function stageSubsteps(stageId: ResearchStage["id"], job?: ResearchJob | 
   const labels = RESEARCH_SUBSTEPS[stageId];
   const state = stageState(stageId, job?.status);
   if (!job || state !== "active") return [];
+  const dynamicLabel = dynamicSubstepLabel(stageId, job);
+  if (dynamicLabel) return [{ label: dynamicLabel, state: "active" }];
   const activeIndex = activeSubstepIndex(stageId, job);
   return [{ label: labels[activeIndex], state: "active" }];
+}
+
+function dynamicSubstepLabel(stageId: ResearchStage["id"], job: ResearchJob): string | null {
+  if (stageId !== "research") return null;
+  const message = job.progressMessage.trim();
+  if (/^Searching .+\.$/.test(message)) return message.replace(/\.$/, "");
+  return null;
 }
 
 function activeSubstepIndex(stageId: ResearchStage["id"], job: ResearchJob): number {

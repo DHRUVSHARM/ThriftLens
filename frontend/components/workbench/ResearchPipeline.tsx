@@ -14,6 +14,7 @@ export function ResearchPipeline({ job }: { job: ResearchJob | null }) {
         {RESEARCH_STAGES.map((stage) => {
           const state = stageState(stage.id, job?.status);
           const substeps = stageSubsteps(stage.id, job);
+          const subtitle = substeps[0]?.label ?? stage.description;
           return (
             <div
               key={stage.id}
@@ -27,7 +28,7 @@ export function ResearchPipeline({ job }: { job: ResearchJob | null }) {
                 <StageIcon state={state} />
                 <span className="text-sm font-semibold text-[var(--text-primary)]">{stage.label}</span>
               </div>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">{stage.description}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{subtitle}</p>
               {substeps.length ? (
                 <div className="mt-3 flex items-start gap-2 rounded-md border border-[color-mix(in_srgb,var(--accent)_24%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-2.5 py-2 text-xs leading-5 text-[var(--text-primary)]">
                   <SubstepIcon state={substeps[0].state} />

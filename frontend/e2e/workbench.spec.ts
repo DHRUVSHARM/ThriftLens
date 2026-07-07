@@ -39,11 +39,11 @@ function queuedJob(jobId: string) {
   };
 }
 
-function researchingJob(jobId: string) {
+function researchingJob(jobId: string, progressMessage = "Planning source searches.") {
   return {
     jobId,
     status: "researching_sources",
-    progressMessage: "Planning source searches.",
+    progressMessage,
     retryable: false,
     providerMode: "SAMPLE_MODE",
     safeError: null,
@@ -456,12 +456,33 @@ test("shows only the current substate while source research is running", async (
 
   const progress = page.getByLabel("Research progress");
   await expect(progress.getByText("Searching sources").first()).toBeVisible();
-  await expect(progress.getByText("Source plan", { exact: true })).toBeVisible();
+  await expect(progress.getByText("Source plan", { exact: true })).toHaveCount(2);
   await expect(progress.getByText("Live sources may take a minute.", { exact: true })).toBeVisible();
   await expect(progress.getByText("Product profile", { exact: true })).toHaveCount(0);
   await expect(progress.getByText("Search context", { exact: true })).toHaveCount(0);
   await expect(progress.getByText("Live source search", { exact: true })).toHaveCount(0);
   await expect(progress.getByText("Normalize results", { exact: true })).toHaveCount(0);
+});
+
+test("shows live source search detail inside the active research card", async ({ page }) => {
+  const jobId = "66666666-6666-4666-8666-666666666666";
+  await mockHealth(page);
+  await page.route("**/api/research-jobs", async (route) => {
+    if (route.request().method() !== "POST") {
+      return route.fallback();
+    }
+    return jsonResponse(route, researchingJob(jobId, "Searching Google Shopping for closest match (1/2)."));
+  });
+  await page.route(`**/api/research-jobs/${jobId}`, async (route) =>
+    jsonResponse(route, researchingJob(jobId, "Searching Google Shopping for closest match (1/2).")),
+  );
+
+  await page.goto("/");
+  await page.getByPlaceholder(/Describe only the product/).fill("minimal black desk lamp with wireless charging");
+  await page.getByRole("button", { name: "Start research" }).click();
+
+  const progress = page.getByLabel("Research progress");
+  await expect(progress.getByText("Searching Google Shopping for closest match (1/2)", { exact: true })).toHaveCount(2);
 });
 
 test("validates image input and submits an image job", async ({ page }) => {

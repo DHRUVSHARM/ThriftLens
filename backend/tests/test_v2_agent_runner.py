@@ -229,9 +229,11 @@ class NonProductReferenceExtractionClient(FakeExtractionClient):
 
 
 class FakeDiscoveryClient:
-    def __init__(self, *, fail_stage: str | None = None) -> None:
+    def __init__(self, *, fail_stage: str | None = None, plan_items: list[ProductSearchPlanItem] | None = None) -> None:
         self.fail_stage = fail_stage
         self.calls: list[str] = []
+        self.plan_items = plan_items
+        self.executed_plan_items: list[list[ProductSearchPlanItem]] = []
 
     async def classify_product_profile(
         self,
@@ -277,7 +279,8 @@ class FakeDiscoveryClient:
     ) -> ProductSearchPlan:
         self.calls.append("plan_search_sources")
         return ProductSearchPlan(
-            planItems=[
+            planItems=self.plan_items
+            or [
                 ProductSearchPlanItem(
                     engine="google_shopping",
                     params={"engine": "google_shopping", "q": product_reference.title},
@@ -290,14 +293,16 @@ class FakeDiscoveryClient:
 
     async def execute_search_plan(self, *, search_plan: ProductSearchPlan) -> ProductSearchExecutionResult:
         self.calls.append("execute_search_plan")
+        self.executed_plan_items.append(search_plan.plan_items)
         if self.fail_stage == "execute":
             raise WorkflowProviderError("research_unavailable", "Research unavailable.", retryable=True)
+        first_item = search_plan.plan_items[0]
         return ProductSearchExecutionResult(
             rawResults=[
                 ProductSearchRawResult(
-                    engine="google_shopping",
-                    intent="closest_match",
-                    params={"engine": "google_shopping", "q": "navy wool blazer"},
+                    engine=first_item.engine,
+                    intent=first_item.intent,
+                    params=first_item.params,
                     response={"shopping_results": []},
                 )
             ]
@@ -600,6 +605,65 @@ async def test_agent_job_runner_text_flow_extracts_reference_then_invokes_workfl
     assert any("Ranking prioritized shopper signals" in note for note in job["final_brief"]["uncertaintyNotes"])
     assert any("Search and ranking used these extracted details" in note for note in job["final_brief"]["uncertaintyNotes"])
     assert any("Research ran google shopping for closest match" in note for note in job["final_brief"]["uncertaintyNotes"])
+
+
+@pytest.mark.anyio
+async def test_agent_job_runner_updates_progress_for_each_live_source_search(
+    clean_jobs: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = str(uuid4())
+    progress_messages: list[str] = []
+    plan_items = [
+        ProductSearchPlanItem(
+            engine="google_shopping",
+            params={"engine": "google_shopping", "q": "navy wool blazer"},
+            intent="closest_match",
+            priority=1,
+        ),
+        ProductSearchPlanItem(
+            engine="ebay",
+            params={"engine": "ebay", "_nkw": "navy wool blazer"},
+            intent="similar_alternatives",
+            priority=2,
+        ),
+    ]
+    extraction_client = FakeExtractionClient()
+    discovery_client = FakeDiscoveryClient(plan_items=plan_items)
+    ranking_client = FakeRankingClient()
+
+    from app.agent import graph as graph_module
+
+    original_update_job_stage = graph_module.update_job_stage
+
+    async def capture_progress(job_id: str, *, status: str, progress_message: str) -> None:
+        progress_messages.append(progress_message)
+        await original_update_job_stage(job_id, status=status, progress_message=progress_message)
+
+    monkeypatch.setattr(graph_module, "update_job_stage", capture_progress)
+    await create_research_job(
+        job_id=job_id,
+        provider_mode="SAMPLE_MODE",
+        input_type="text",
+        request_payload={
+            "inputType": "text",
+            "textDescription": "navy wool blazer",
+            "researchPreferences": {"rankingPreference": "grouped"},
+        },
+        progress_message="Research queued.",
+    )
+
+    result = await AgentJobRunner(
+        extraction_client_factory=lambda: extraction_client,
+        discovery_client_factory=lambda: discovery_client,
+        ranking_client_factory=lambda: ranking_client,
+    ).run(job_id)
+
+    assert result.status == "complete"
+    assert discovery_client.calls.count("execute_search_plan") == 2
+    assert all(len(items) == 1 for items in discovery_client.executed_plan_items)
+    assert "Searching Google Shopping for closest match (1/2)." in progress_messages
+    assert "Searching eBay for similar alternatives (2/2)." in progress_messages
 
 
 @pytest.mark.anyio
