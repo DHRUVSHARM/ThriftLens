@@ -282,6 +282,7 @@ def safe_input_gate_message(code: str) -> str:
 def input_gate_decision(gate: ImageGateResult, request_payload: dict[str, Any], settings: Any) -> str:
     target_description = (request_payload.get("targetDescription") or "").strip()
     best_candidate_confidence = max((product.confidence for product in gate.detected_products), default=0.0)
+    too_many_candidates = len(gate.detected_products) > settings.input_gate_max_products_without_target
 
     if gate.safety_status == "unsafe":
         return "fail_safe"
@@ -294,10 +295,14 @@ def input_gate_decision(gate: ImageGateResult, request_payload: dict[str, Any], 
         return "needs_refinement"
     if gate.product_suitability == "multiple_products" and not target_description:
         return "needs_refinement"
+    if too_many_candidates and not target_description:
+        return "needs_refinement"
     if (
         gate.product_suitability == "multiple_products"
         and best_candidate_confidence < settings.input_gate_target_match_confidence
     ):
+        return "needs_refinement"
+    if too_many_candidates and best_candidate_confidence < settings.input_gate_target_match_confidence:
         return "needs_refinement"
     return gate.decision
 
@@ -316,7 +321,8 @@ def input_gate_code(gate: ImageGateResult) -> str:
 
 def image_quality_extraction_reason(gate: ImageGateResult, request_payload: dict[str, Any], settings: Any) -> str | None:
     target_description = (request_payload.get("targetDescription") or "").strip()
-    if gate.product_suitability == "multiple_products" and target_description:
+    too_many_candidates = len(gate.detected_products) > settings.input_gate_max_products_without_target
+    if (gate.product_suitability == "multiple_products" or too_many_candidates) and target_description:
         return "targeted_multi_product_image"
     if gate.product_likeness_confidence < settings.input_gate_quality_model_confidence:
         return "low_gate_confidence"

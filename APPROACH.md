@@ -153,18 +153,21 @@ The backend uses the production-shaped path by default.
 
 ```mermaid
 flowchart LR
-  Browser["Browser / reviewer"] --> Web["Next.js frontend"]
+  Browser["Browser / reviewer"] --> Web["Next.js frontend<br/>upload, camera, text, focus note"]
   Web --> Api["FastAPI API"]
   Api --> Pg["Postgres job state"]
-  Api --> Obj["MinIO image storage"]
+  Api --> Obj["Private MinIO image storage<br/>6 hour TTL"]
   Api --> Queue["Redis / Celery queue"]
-  Queue --> Worker["Celery worker"]
+  Beat["Celery Beat cleanup scheduler"] --> Obj
+  Beat --> Pg
+  Queue --> Worker["Celery worker<br/>one job per child"]
   Worker --> Runner["AgentJobRunner"]
   Runner --> Graph["LangGraph ProductResearchGraph"]
-  Graph --> Runtime["MCP runtime"]
-  Runtime --> Extraction["Extraction MCP"]
-  Runtime --> Discovery["Discovery MCP"]
-  Runtime --> Ranking["Ranking MCP"]
+  Graph --> Runtime["MCP runtime<br/>allowlist, timeouts, safe tool errors"]
+  Runtime --> Extraction["Private Extraction MCP"]
+  Runtime --> Discovery["Private Discovery MCP"]
+  Runtime --> Ranking["Private Ranking MCP"]
+  Extraction --> Obj
   Extraction --> Gemini["Gemini"]
   Discovery --> SerpApi["SerpAPI MCP"]
   Discovery --> Gemini
@@ -202,7 +205,7 @@ flowchart TD
 
   Input -- text --> TextSafety["screen_text_safety"]
   Input -- image --> ImageSafety["screen_image_safety"]
-  Input -- image plus text --> TextSafety
+  Input -- image plus focus note --> TextSafety
 
   TextSafety --> TextDecision{"Safe product intent?"}
   TextDecision -- no --> TextStop["failed or needs_refinement"]
@@ -212,13 +215,14 @@ flowchart TD
   ImageSafety --> ImageDecision{"Safe clear product?"}
   ImageDecision -- unsafe --> ImageStop["failed unsafe image"]
   ImageDecision -- unclear --> ImageRefine["needs_refinement"]
-  ImageDecision -- clear --> Understand["understand_image_product"]
+  ImageDecision -- clear --> Understand["understand_image_product<br/>gate, ambiguity normalization,<br/>optional disambiguation, extraction"]
 
   Understand --> UnderstandDecision{"Reference ready?"}
-  UnderstandDecision -- blocked or unclear --> ProductStop["failed or needs_refinement"]
+  UnderstandDecision -- blocked, unsafe, or unclear --> ProductStop["failed or needs_refinement"]
   UnderstandDecision -- yes --> PersistRef["persist_reference"]
 
-  Extract --> RefDecision{"Valid consumer product?"}
+  Extract --> RefCheck["validate_reference<br/>consumer product + category guard"]
+  RefCheck --> RefDecision{"Valid searchable product?"}
   RefDecision -- no --> ProductStop
   RefDecision -- yes --> PersistRef
 
@@ -226,8 +230,13 @@ flowchart TD
   Profile --> Context["build_search_context"]
   Context --> Plan["plan_search_sources"]
   Plan --> Search["execute_search_plan"]
+  Search -. source unavailable after reference .-> Partial["persist_partial_brief"]
   Search --> Normalize["normalize_products"]
-  Normalize --> Score["score_candidates"]
+  Normalize --> ProductResults{"Product-shaped candidates?"}
+  ProductResults -- no --> Partial
+  ProductResults -- yes --> Score["score_candidates"]
+  Score -. ranking model fails .-> DeterministicFallback["deterministic ranking fallback"]
+  DeterministicFallback --> Mismatch
   Score --> Mismatch["detect_mismatches"]
   Mismatch --> Group["group_candidates"]
   Group --> Explain["explain_ranking"]
@@ -238,6 +247,7 @@ flowchart TD
   ImageStop --> End
   ImageRefine --> End
   ProductStop --> End
+  Partial --> End
 ```
 
 ### Unbounded Agent Loop Vs Graph Orchestration
@@ -276,15 +286,17 @@ The shared MCP runtime owns connection config, tool discovery, allowlisting, tim
 flowchart LR
   Graph["LangGraph nodes"] --> Runtime["MCP runtime<br/>allowlist, timeouts, retries,<br/>safe tool errors, redacted logs"]
   Runtime --> Extraction["Extraction MCP<br/>image safety, product gate,<br/>reference extraction, repair,<br/>disambiguation"]
-  Runtime --> Discovery["Discovery MCP<br/>product profile, search context,<br/>source planning, SerpAPI search,<br/>product normalization"]
+  Runtime --> Discovery["Discovery MCP<br/>product profile, search context,<br/>source planning, compact SerpAPI search,<br/>product normalization"]
   Runtime --> Ranking["Ranking MCP<br/>prompt-driven ranking,<br/>deterministic fallback,<br/>mismatch caveats, grouping,<br/>explanations"]
-  Extraction --> Gemini["Gemini models"]
+  Extraction --> Gemini["Gemini models<br/>sync SDK isolated off event loop"]
   Discovery --> Gemini
   Discovery --> SerpApi["SerpAPI hosted MCP"]
   Ranking --> Gemini
 ```
 
 This was intentionally more modular than a single provider file. It makes the system easier to reason about, lets each capability evolve independently, and keeps source integrations behind a replaceable boundary.
+
+One operational detail in the current implementation is that synchronous provider and object-storage SDK calls are pushed through worker threads from async code. That keeps the graph, MCP servers, upload path, ranking calls, and cleanup jobs from pinning the async event loop while an external SDK call is slow.
 
 ### Extraction Server
 
@@ -306,14 +318,20 @@ flowchart TD
   ImageSafety --> ImageDecision{"Safe clear image?"}
   ImageDecision -- unsafe --> ImageStop["failed unsafe image"]
   ImageDecision -- unclear --> ImageRefine["needs_refinement<br/>ask for clearer product/focus"]
-  ImageDecision -- safe --> ProductGate["image_product_gate<br/>product-likeness, ambiguity,<br/>multi-object handling"]
+  ImageDecision -- safe --> ProductGate["image_product_gate<br/>product-likeness, ambiguity,<br/>detected product candidates"]
 
-  ProductGate --> GateDecision{"Product target clear?"}
-  GateDecision -- no --> TargetRefine["needs_refinement<br/>ask user to focus target"]
-  GateDecision -- yes --> ExtractImage["extract_product_reference<br/>image or image plus focus note"]
+  ProductGate --> AmbiguityNormalize["normalize ambiguity<br/>too many candidates becomes multi-product"]
+  AmbiguityNormalize --> FocusDecision{"Single target clear<br/>or focus note present?"}
+  FocusDecision -- no --> TargetRefine["needs_refinement<br/>ask user to focus target"]
+  FocusDecision -- focus note present --> Disambiguate["disambiguate_target_product<br/>choose visible target or ask refinement"]
+  FocusDecision -- clear single target --> ExtractImage["extract_product_reference<br/>image only"]
+  Disambiguate --> DisambiguationDecision{"Target selected?"}
+  DisambiguationDecision -- no --> TargetRefine
+  DisambiguationDecision -- yes --> ExtractImageFocus["extract_product_reference<br/>image plus focus note"]
 
   ExtractText --> Validate["schema validation + product category guard"]
   ExtractImage --> Validate
+  ExtractImageFocus --> Validate
   Validate --> ValidDecision{"Valid consumer product?"}
   ValidDecision -- no --> RefineOrFail["needs_refinement or regulated-product failure"]
   ValidDecision -- yes --> Reference["ProductReference<br/>type, brand/model, color,<br/>features, assumptions, confidence"]
@@ -323,8 +341,10 @@ flowchart TD
   TextSafety --> Gemini["Gemini"]
   ImageSafety --> Gemini
   ProductGate --> Gemini
+  Disambiguate --> Gemini
   ExtractText --> Gemini
   ExtractImage --> Gemini
+  ExtractImageFocus --> Gemini
   Repair --> Gemini
 ```
 
@@ -337,33 +357,35 @@ The Discovery MCP server owns product research before ranking. It turns the extr
 ```mermaid
 flowchart TD
   Reference["ProductReference"] --> ProfileGate{"Discovery model available?"}
-  ProfileGate -- yes --> ModelProfile["classify_product_profile<br/>what kind of product,<br/>how shoppers compare it,<br/>priority attributes"]
+  ProfileGate -- yes --> ModelProfile["classify_product_profile<br/>product type, shopper priorities,<br/>engine choices, query hints"]
   ProfileGate -- no --> DeterministicProfile["deterministic profile fallback<br/>category, attributes, known terms"]
 
   ModelProfile --> Context["build_search_context<br/>aliases, include terms,<br/>exclude terms, shopper signals"]
   DeterministicProfile --> Context
 
   Context --> PlanGate{"Planning model available?"}
-  PlanGate -- yes --> ModelPlan["plan_product_search<br/>choose allowed engines,<br/>queries, params, intent"]
+  PlanGate -- yes --> ModelPlan["plan_product_search<br/>choose allowed engines,<br/>compact queries, params, intent"]
   PlanGate -- no --> DeterministicPlan["deterministic search plan<br/>closest + similar alternatives"]
 
   ModelPlan --> ValidatePlan["validate_search_plan<br/>allowlisted engines,<br/>bounded calls, sanitized params"]
   DeterministicPlan --> ValidatePlan
-  ValidatePlan --> Search["execute_search_plan<br/>SerpAPI MCP live source calls"]
+  ValidatePlan --> CompactQueries["compact query params<br/>fewest product-identifying terms"]
+  CompactQueries --> Search["execute_search_plan<br/>SerpAPI MCP compact mode<br/>source-specific timeout"]
   Search --> RawResults["ProductSearchRawResult<br/>engine, intent, params, raw response"]
   Search -. provider error .-> SourceError["safe source error<br/>partial result path"]
 
   RawResults --> Normalize["normalize_products<br/>shopping/product fields only"]
   Normalize --> ProductShape{"Product-shaped evidence?"}
   ProductShape -- no --> Drop["drop generic links/articles"]
-  ProductShape -- yes --> SourceProducts["SourceProduct[]<br/>title, retailer, price,<br/>url, image, availability"]
+  ProductShape -- yes --> CandidateCap["cap candidates<br/>per source and total"]
+  CandidateCap --> SourceProducts["SourceProduct[]<br/>title, retailer, price,<br/>url, image, availability"]
 
   ProfileGate --> Gemini["Gemini"]
   PlanGate --> Gemini
   Search --> SerpApi["SerpAPI hosted MCP"]
 ```
 
-This server is where the live-source latency tradeoff shows up. The search plan is bounded and validated before execution, and normalization prevents generic web links from becoming product cards.
+This server is where the live-source latency tradeoff shows up. The search plan is bounded and validated before execution, and normalization prevents generic web links from becoming product cards. The current implementation also requests compact SerpAPI MCP responses, compresses search queries to the most product-identifying terms, and caps normalized candidates so ranking stays useful without carrying unnecessary source payload.
 
 ### Ranking Server
 
@@ -422,6 +444,7 @@ Input guardrails:
 - Unsafe and regulated product categories are blocked.
 - Non-product and malformed text asks for a clearer product description.
 - Ambiguous images ask for focus instead of guessing.
+- Multi-product image gates are normalized conservatively: if multiple candidates are detected and no focus note is present, the app asks for refinement before extraction.
 
 Provider/source guardrails:
 
@@ -429,6 +452,8 @@ Provider/source guardrails:
 - Provider errors are mapped to safe user-facing messages.
 - Circuit breakers prevent repeatedly hammering unavailable providers.
 - Source failures after extraction preserve the extracted reference as a partial result.
+- Synchronous Gemini, SerpAPI-adjacent, MinIO upload, and cleanup calls are isolated from async orchestration so slow SDK calls do not block the graph event loop.
+- Live discovery requests use compact source payloads, compact product-shaped queries, and candidate caps to reduce ranking overhead.
 - Secret values and secret-bearing URLs are not returned to the browser or persisted in trace metadata.
 
 UI guardrails:

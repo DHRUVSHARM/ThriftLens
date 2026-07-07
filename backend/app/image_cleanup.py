@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -27,7 +28,7 @@ async def cleanup_expired_uploaded_images(
     for image in expired_images:
         object_key = str(image["object_key"])
         try:
-            delete_image(object_key)
+            await asyncio.to_thread(delete_image, object_key)
         except Exception:
             failed += 1
             logger.warning("Expired image object cleanup failed for metadata row %s", image["id"], exc_info=True)

@@ -1,3 +1,6 @@
+import json
+import sys
+from types import ModuleType, SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -183,6 +186,80 @@ class RecordingPolicy:
     async def run(self, *, dependency: str, operation: str, call):  # type: ignore[no-untyped-def]
         self.calls.append({"dependency": dependency, "operation": operation})
         return await call()
+
+
+@pytest.mark.anyio
+async def test_gemini_model_call_runs_sync_sdk_in_worker_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = GeminiExtractionProvider(
+        policy=ToolExecutionPolicy(timeout_seconds=1, max_retries=0, circuit_breaker_enabled=False)
+    )
+    monkeypatch.setattr(provider.settings, "gemini_api_key", "test-key")
+    thread_calls: list[dict] = []
+    to_thread_calls: list[str] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):  # type: ignore[no-untyped-def]
+        to_thread_calls.append(func.__name__)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("app.gemini_provider.asyncio.to_thread", fake_to_thread)
+
+    class FakePart:
+        @staticmethod
+        def from_bytes(*, data: bytes, mime_type: str) -> dict:
+            return {"data": data, "mime_type": mime_type}
+
+    class FakeGenerateContentConfig:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+    class FakeModels:
+        def generate_content(self, **kwargs: object) -> SimpleNamespace:
+            thread_calls.append(kwargs)
+            return SimpleNamespace(
+                text=json.dumps(
+                    {
+                        "productType": "desk lamp",
+                        "title": "minimal black desk lamp",
+                        "brand": None,
+                        "color": "black",
+                        "materials": [],
+                        "keyFeatures": [],
+                        "searchQueries": ["minimal black desk lamp"],
+                        "confidence": 0.9,
+                        "assumptions": [],
+                    }
+                )
+            )
+
+    class FakeClient:
+        def __init__(self, *, api_key: str) -> None:
+            self.api_key = api_key
+            self.models = FakeModels()
+
+    google_module = ModuleType("google")
+    genai_module = ModuleType("google.genai")
+    types_module = ModuleType("google.genai.types")
+    genai_module.Client = FakeClient  # type: ignore[attr-defined]
+    genai_module.types = types_module  # type: ignore[attr-defined]
+    types_module.Part = FakePart  # type: ignore[attr-defined]
+    types_module.GenerateContentConfig = FakeGenerateContentConfig  # type: ignore[attr-defined]
+    google_module.genai = genai_module  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "google", google_module)
+    monkeypatch.setitem(sys.modules, "google.genai", genai_module)
+    monkeypatch.setitem(sys.modules, "google.genai.types", types_module)
+
+    output = await provider._call_gemini_model(
+        prompt="Extract a product.",
+        image_bytes=b"image",
+        image_mime_type="image/png",
+        model="test-model",
+        response_schema=ProductReference,
+    )
+
+    assert output["title"] == "minimal black desk lamp"
+    assert to_thread_calls == ["generate_content"]
+    assert thread_calls[0]["model"] == "test-model"
+    assert thread_calls[0]["contents"][1] == {"data": b"image", "mime_type": "image/png"}
 
 
 @pytest.mark.anyio

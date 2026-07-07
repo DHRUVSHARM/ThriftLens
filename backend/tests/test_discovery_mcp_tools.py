@@ -243,6 +243,89 @@ def test_validate_search_plan_diversifies_duplicate_shopping_alternative_when_pr
     assert validated.plan_items[1].params["_nkw"]
 
 
+def test_validate_search_plan_compacts_overbroad_closest_query() -> None:
+    settings = Settings(
+        provider_mode="SAMPLE_MODE",
+        serpapi_max_calls_per_job=1,
+        discovery_max_engines=1,
+        discovery_engine_allowlist="google_shopping",
+    )
+    reference = ProductReference(
+        productType="t-shirt",
+        title="red crew neck t-shirt",
+        color="red",
+        keyFeatures=["crew neck", "short sleeve", "solid color", "casual fit"],
+        searchQueries=["red crew neck t-shirt"],
+    )
+    profile = ProductDiscoveryProfile(productFamily="apparel", refinedProductType="t-shirt", recommendedEngines=["google_shopping"])
+    context = ProductSearchContext(
+        featureTerms=["crew neck", "short sleeve", "solid color", "casual fit", "cotton polyester blend"],
+        mustHaveDetails=["t-shirt", "red"],
+    )
+    plan = ProductSearchPlan(
+        planItems=[
+            ProductSearchPlanItem(
+                engine="google_shopping",
+                params={
+                    "engine": "google_shopping",
+                    "q": "red crew neck short sleeve solid color casual fit cotton polyester blend standard t-shirt product item",
+                },
+                intent="closest_match",
+                priority=1,
+            )
+        ]
+    )
+
+    validated = validate_search_plan(plan, reference, profile, context, {}, settings)
+
+    assert validated.plan_items[0].params["q"] == "red crew neck t-shirt"
+
+
+def test_validate_search_plan_accepts_concise_model_query_hint() -> None:
+    settings = Settings(
+        provider_mode="SAMPLE_MODE",
+        serpapi_max_calls_per_job=1,
+        discovery_max_engines=1,
+        discovery_engine_allowlist="google_shopping",
+    )
+    reference = ProductReference(
+        productType="blazer",
+        title="navy wool blazer",
+        brand=None,
+        color="navy",
+        materials=["wool"],
+        keyFeatures=["tailored fit", "notched lapel"],
+        searchQueries=["navy wool blazer"],
+    )
+    profile = ProductDiscoveryProfile(
+        productFamily="apparel",
+        refinedProductType="blazer",
+        recommendedEngines=["google_shopping"],
+        queryParamHints=[
+            {
+                "engine": "google_shopping",
+                "params": {"q": "navy wool blazer"},
+                "intent": "closest_match",
+            }
+        ],
+    )
+    context = ProductSearchContext(featureTerms=["tailored fit", "notched lapel"], mustHaveDetails=["blazer", "navy", "wool"])
+    plan = ProductSearchPlan(
+        planItems=[
+            ProductSearchPlanItem(
+                engine="google_shopping",
+                params={"engine": "google_shopping", "q": "navy blazer tailored notched lapel premium formal jacket product"},
+                intent="closest_match",
+                priority=1,
+            )
+        ]
+    )
+
+    validated = validate_search_plan(plan, reference, profile, context, {}, settings)
+
+    assert validated.plan_items[0].params["q"] == "navy wool blazer"
+
+
 def test_coerce_mcp_list_result_handles_text_wrapped_lists() -> None:
     assert coerce_mcp_list_result({"type": "text", "text": '[{"title": "navy blazer"}]'}) == [{"title": "navy blazer"}]
     assert coerce_mcp_list_result({"structuredContent": [{"title": "navy blazer"}]}) == [{"title": "navy blazer"}]
@@ -330,13 +413,14 @@ async def test_discovery_client_uses_scaled_timeout_for_execute_search_plan(monk
 
 @pytest.mark.anyio
 async def test_execute_search_plan_uses_serpapi_specific_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, float] = {}
+    captured: dict[str, object] = {}
 
     class FakeRuntime:
         def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
             captured["timeout"] = kwargs["policy"].timeout_seconds
 
         async def invoke_tool(self, **kwargs):  # type: ignore[no-untyped-def]
+            captured["payload"] = kwargs["payload"]
             return {"shopping_results": []}
 
     monkeypatch.setattr("app.mcp_servers.discovery.tools.MCPRuntime", FakeRuntime)
@@ -359,6 +443,10 @@ async def test_execute_search_plan_uses_serpapi_specific_timeout(monkeypatch: py
     result = await execute_search_plan_tool(search_plan=plan.model_dump(by_alias=True), settings=settings)
 
     assert captured["timeout"] == 55
+    assert captured["payload"] == {
+        "params": {"engine": "google_shopping", "q": "black cotton t-shirt", "num": 10},
+        "mode": "compact",
+    }
     assert result["rawResults"]
 
 
@@ -441,6 +529,49 @@ def test_normalize_discovery_response_filters_non_google_generic_links() -> None
 
 
 @pytest.mark.anyio
+async def test_normalize_products_caps_candidates_per_source_and_total() -> None:
+    many_results = [
+        {
+            "title": f"Red Crew Neck T-Shirt {index}",
+            "source": "Example Store",
+            "link": f"https://example.com/red-shirt-{index}",
+            "extracted_price": 20 + index,
+        }
+        for index in range(60)
+    ]
+
+    products = await normalize_products_tool(
+        search_results={
+            "rawResults": [
+                {
+                    "engine": "google_shopping",
+                    "intent": "closest_match",
+                    "params": {"engine": "google_shopping", "q": "red crew neck t-shirt"},
+                    "response": {"shopping_results": many_results},
+                },
+                {
+                    "engine": "google_shopping",
+                    "intent": "similar_alternatives",
+                    "params": {"engine": "google_shopping", "q": "red t-shirt"},
+                    "response": {"shopping_results": many_results},
+                },
+                {
+                    "engine": "ebay",
+                    "intent": "similar_alternatives",
+                    "params": {"engine": "ebay", "_nkw": "red t-shirt"},
+                    "response": {"shopping_results": many_results},
+                },
+            ],
+            "sourceErrors": [],
+        }
+    )
+
+    assert len(products) == 48
+    assert products[0]["title"] == "Red Crew Neck T-Shirt 0"
+    assert products[-1]["title"] == "Red Crew Neck T-Shirt 23"
+
+
+@pytest.mark.anyio
 async def test_discovery_tools_build_profile_context_plan_and_products() -> None:
     settings = Settings(provider_mode="SAMPLE_MODE", discovery_max_engines=2, serpapi_max_calls_per_job=2)
     reference = {
@@ -500,6 +631,13 @@ async def test_discovery_tools_build_profile_context_plan_and_products() -> None
 async def test_discovery_model_call_uses_json_mode_without_gemini_response_schema(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_config: dict[str, object] = {}
     captured_contents: list[str] = []
+    to_thread_calls: list[str] = []
+
+    async def fake_to_thread(func, /, *args, **kwargs):  # type: ignore[no-untyped-def]
+        to_thread_calls.append(func.__name__)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("app.mcp_servers.discovery.tools.asyncio.to_thread", fake_to_thread)
 
     class FakeGenerateContentConfig:
         def __init__(self, **kwargs: object) -> None:
@@ -541,6 +679,7 @@ async def test_discovery_model_call_uses_json_mode_without_gemini_response_schem
     )
 
     assert raw["engineRationale"]["google_shopping"]
+    assert to_thread_calls == ["generate_content"]
     assert captured_config == {"response_mime_type": "application/json"}
     assert "response_schema" not in captured_config
     assert "Required JSON shape" in captured_contents[0]

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 from uuid import UUID, uuid4
@@ -206,7 +207,8 @@ async def create_gateway_job(
             request_payload.pop("targetDescription", None)
         image_content = await read_valid_image(image_file, settings)
         try:
-            stored_image = upload_research_image(
+            stored_image = await asyncio.to_thread(
+                upload_research_image,
                 job_id=job_id,
                 content=image_content,
                 content_type=image_file.content_type or "",

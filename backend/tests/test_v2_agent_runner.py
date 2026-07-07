@@ -70,6 +70,7 @@ class FakeExtractionClient:
         text_safety_message: str | None = None,
         product_suitability: str = "single_product",
         gate_decision: str = "proceed",
+        detected_product_count: int = 1,
     ) -> None:
         self.safety_status = safety_status
         self.safety_message = safety_message
@@ -78,6 +79,7 @@ class FakeExtractionClient:
         self.text_safety_message = text_safety_message
         self.product_suitability = product_suitability
         self.gate_decision = gate_decision
+        self.detected_product_count = detected_product_count
         self.calls: list[str] = []
 
     async def screen_image_safety(self, *, request_payload: dict, image_metadata: list[dict]) -> ImageSafetyResult:
@@ -113,7 +115,7 @@ class FakeExtractionClient:
                 "confidence": 0.92,
             }
         ]
-        if self.product_suitability == "multiple_products":
+        if self.product_suitability == "multiple_products" or self.detected_product_count > 1:
             detected_products.append(
                 {
                     "label": "brown leather shoes",
@@ -994,7 +996,7 @@ async def test_agent_job_runner_ambiguous_image_requests_refinement(clean_jobs: 
     ).run(job_id)
 
     assert result.status == "needs_refinement"
-    assert extraction_client.calls == ["screen_image_safety", "image_product_gate", "disambiguate_target_product"]
+    assert extraction_client.calls == ["screen_image_safety", "image_product_gate"]
     assert discovery_client.calls == []
     assert ranking_client.calls == []
     job = await get_research_job(job_id)
@@ -1002,6 +1004,74 @@ async def test_agent_job_runner_ambiguous_image_requests_refinement(clean_jobs: 
     assert job["status"] == "needs_refinement"
     assert job["safe_error"]["code"] == "ambiguous_image"
     assert "Multiple products or objects" in job["safe_error"]["message"]
+
+
+@pytest.mark.anyio
+async def test_agent_job_runner_inconsistent_multi_candidate_gate_requests_refinement(clean_jobs: None) -> None:
+    job_id = str(uuid4())
+    extraction_client = FakeExtractionClient(product_suitability="single_product", detected_product_count=2)
+    discovery_client = FakeDiscoveryClient()
+    ranking_client = FakeRankingClient()
+    await create_research_job(
+        job_id=job_id,
+        provider_mode="SAMPLE_MODE",
+        input_type="image",
+        request_payload={"inputType": "image"},
+        progress_message="Research queued.",
+    )
+
+    result = await AgentJobRunner(
+        extraction_client_factory=lambda: extraction_client,
+        discovery_client_factory=lambda: discovery_client,
+        ranking_client_factory=lambda: ranking_client,
+    ).run(job_id)
+
+    assert result.status == "needs_refinement"
+    assert extraction_client.calls == ["screen_image_safety", "image_product_gate"]
+    assert discovery_client.calls == []
+    assert ranking_client.calls == []
+    job = await get_research_job(job_id)
+    assert job is not None
+    assert job["status"] == "needs_refinement"
+    assert job["safe_error"]["code"] == "ambiguous_image"
+    assert "Multiple products or objects" in job["safe_error"]["message"]
+
+
+@pytest.mark.anyio
+async def test_agent_job_runner_inconsistent_multi_candidate_gate_with_target_disambiguates(clean_jobs: None) -> None:
+    job_id = str(uuid4())
+    extraction_client = FakeExtractionClient(product_suitability="single_product", detected_product_count=2)
+    discovery_client = FakeDiscoveryClient()
+    ranking_client = FakeRankingClient()
+    await create_research_job(
+        job_id=job_id,
+        provider_mode="SAMPLE_MODE",
+        input_type="image",
+        request_payload={
+            "inputType": "image",
+            "targetDescription": "the navy wool blazer",
+        },
+        progress_message="Research queued.",
+    )
+
+    result = await AgentJobRunner(
+        extraction_client_factory=lambda: extraction_client,
+        discovery_client_factory=lambda: discovery_client,
+        ranking_client_factory=lambda: ranking_client,
+    ).run(job_id)
+
+    assert result.status == "complete"
+    assert extraction_client.calls == [
+        "screen_text_safety",
+        "screen_image_safety",
+        "image_product_gate",
+        "disambiguate_target_product",
+        "extract_product_reference:image",
+    ]
+    assert discovery_client.calls
+    job = await get_research_job(job_id)
+    assert job is not None
+    assert job["product_reference"]["title"] == "the navy wool blazer"
 
 
 @pytest.mark.anyio

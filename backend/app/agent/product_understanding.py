@@ -303,13 +303,23 @@ class ProductUnderstandingAgent:
             request_payload=request_payload,
             image_metadata=image_metadata,
         )
+        gate = _normalize_gate_product_ambiguity(gate, self.settings)
 
         request_payload = dict(request_payload)
         target_selection: TargetProductSelection | None = None
         if gate.product_suitability == "multiple_products":
+            target_description = (request_payload.get("targetDescription") or "").strip() or None
+            if not target_description:
+                return _refinement_decision(
+                    gate=gate,
+                    target_selection=None,
+                    request_payload=request_payload,
+                    tool_calls=bounded.calls,
+                    message=gate.clarification_prompt or safe_input_gate_message("ambiguous_image"),
+                )
             target_selection = await self._disambiguate_if_allowed(
                 gate=gate,
-                target_description=(request_payload.get("targetDescription") or "").strip() or None,
+                target_description=target_description,
                 bounded=bounded,
             )
             if target_selection.decision == "needs_refinement":
@@ -416,6 +426,24 @@ def _refinement_decision(
         userSafeMessage=message,
         reason=target_selection.reason if target_selection is not None else gate.reason,
         toolCalls=tool_calls,
+    )
+
+
+def _normalize_gate_product_ambiguity(gate: ImageGateResult, settings: Settings) -> ImageGateResult:
+    if gate.product_suitability != "single_product":
+        return gate
+    if len(gate.detected_products) <= settings.input_gate_max_products_without_target:
+        return gate
+    return gate.model_copy(
+        update={
+            "product_suitability": "multiple_products",
+            "needs_clarification": True,
+            "clarification_prompt": gate.clarification_prompt
+            or "Multiple products or objects were detected. Add a short focus note or crop the image to one product.",
+            "reason": (
+                "Multiple product candidates were detected, so the image needs a clearer target before extraction."
+            ),
+        }
     )
 
 

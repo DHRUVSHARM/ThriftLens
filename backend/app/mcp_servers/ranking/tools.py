@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -193,7 +194,8 @@ async def _model_score_candidates(
             f"ProductSearchContext: {model_dump_alias(search_context) if search_context else {}}\n"
             f"Candidates: {candidate_payload}"
         )
-        response = client.models.generate_content(
+        response = await asyncio.to_thread(
+            client.models.generate_content,
             model=settings.gemini_ranking_model_name(),
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -231,7 +233,11 @@ async def _model_explain_ranking(
             f"ProductSearchContext: {model_dump_alias(search_context) if search_context else {}}\n"
             f"RankedProducts: {payload}"
         )
-        response = client.models.generate_content(model=settings.gemini_ranking_model_name(), contents=prompt)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=settings.gemini_ranking_model_name(),
+            contents=prompt,
+        )
         return _plain_model_summary(response.text or "")
 
     return await (policy or ToolExecutionPolicy()).run(dependency="gemini", operation="gemini_ranking_explain", call=call)
