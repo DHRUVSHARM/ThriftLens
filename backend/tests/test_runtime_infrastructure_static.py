@@ -105,7 +105,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("celery -A app.worker.celery_app beat", compose)
         self.assertIn("--concurrency=1", compose)
         self.assertIn("--prefetch-multiplier=1", compose)
-        self.assertIn("--max-tasks-per-child=10", compose)
+        self.assertIn("--max-tasks-per-child=1", compose)
         self.assertIn("SERPAPI_TIMEOUT_SECONDS: ${SERPAPI_TIMEOUT_SECONDS:-60}", compose)
 
     def test_render_blueprint_defines_deployment_services(self) -> None:
@@ -140,7 +140,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("connectionString", blueprint)
         self.assertIn("--concurrency=1", blueprint)
         self.assertIn("--prefetch-multiplier=1", blueprint)
-        self.assertIn("--max-tasks-per-child=10", blueprint)
+        self.assertIn("--max-tasks-per-child=1", blueprint)
 
     def test_schema_contains_durable_runtime_tables_and_json_artifacts(self) -> None:
         schema = read("backend/app/schema.sql")

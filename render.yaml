@@ -183,7 +183,7 @@ services:
     plan: starter
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    dockerCommand: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=10
+    dockerCommand: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=1
     envVars:
       - fromGroup: thriftlens-backend-common
       - key: DATABASE_URL

@@ -13,7 +13,20 @@ _lock = Lock()
 
 def _run_loop(loop: asyncio.AbstractEventLoop) -> None:
     asyncio.set_event_loop(loop)
-    loop.run_forever()
+    try:
+        loop.run_forever()
+    finally:
+        _cancel_pending_tasks(loop)
+        loop.close()
+
+
+def _cancel_pending_tasks(loop: asyncio.AbstractEventLoop) -> None:
+    pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    loop.run_until_complete(loop.shutdown_asyncgens())
 
 
 def _get_loop() -> asyncio.AbstractEventLoop:
@@ -36,3 +49,17 @@ def run_async(coro: Coroutine[Any, Any, T], *, timeout: float | None = None) -> 
     except BaseException:
         future.cancel()
         raise
+
+
+def reset_async_runtime() -> None:
+    global _loop, _thread
+    with _lock:
+        loop = _loop
+        _loop = None
+        _thread = None
+    if loop is None or loop.is_closed():
+        return
+    try:
+        loop.call_soon_threadsafe(loop.stop)
+    except RuntimeError:
+        pass

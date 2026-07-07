@@ -4,7 +4,7 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from celery import Celery
 
 from app.agent.runner import run_agent_job
-from app.async_runtime import run_async
+from app.async_runtime import reset_async_runtime, run_async
 from app.config import get_settings
 from app.health import collect_runtime_health
 from app.image_cleanup import cleanup_expired_uploaded_images
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 TASK_TIME_LIMIT_SECONDS = 300
 TASK_SOFT_TIME_LIMIT_SECONDS = 240
 WORKER_RUN_TIMEOUT_SECONDS = TASK_SOFT_TIME_LIMIT_SECONDS - 10
+WORKER_FAILURE_MARK_TIMEOUT_SECONDS = 10
 
 celery_app = Celery(
     "thriftlens",
@@ -55,23 +56,35 @@ def process_research_job(job_id: str) -> dict:
         return result.model_dump(by_alias=True)
     except FutureTimeoutError:
         logger.warning("Research worker timed out for job %s", job_id)
-        run_async(
-            mark_job_failed(
-                job_id,
-                code="worker_task_timeout",
-                message="Research took too long. Try again with clearer product evidence.",
-                retryable=True,
-            )
+        reset_async_runtime()
+        _mark_research_job_failed(
+            job_id,
+            code="worker_task_timeout",
+            message="Research took too long. Try again with clearer product evidence.",
         )
         return {"jobId": job_id, "status": "failed"}
     except Exception:
         logger.exception("Research worker failed unexpectedly for job %s", job_id)
+        reset_async_runtime()
+        _mark_research_job_failed(
+            job_id,
+            code="worker_task_failed",
+            message="Research worker failed unexpectedly. Try again.",
+        )
+        return {"jobId": job_id, "status": "failed"}
+
+
+def _mark_research_job_failed(job_id: str, *, code: str, message: str) -> None:
+    try:
         run_async(
             mark_job_failed(
                 job_id,
-                code="worker_task_failed",
-                message="Research worker failed unexpectedly. Try again.",
+                code=code,
+                message=message,
                 retryable=True,
-            )
+            ),
+            timeout=WORKER_FAILURE_MARK_TIMEOUT_SECONDS,
         )
-        return {"jobId": job_id, "status": "failed"}
+    except Exception:
+        logger.exception("Failed to persist worker failure state for job %s", job_id)
+        reset_async_runtime()

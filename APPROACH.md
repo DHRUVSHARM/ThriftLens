@@ -381,6 +381,8 @@ The Render deployment mirrors the local Docker Compose service split:
 
 Render-specific infrastructure is declared in the root `render.yaml` Blueprint. Local Docker Compose remains the primary fallback review path.
 
+The Celery worker is intentionally conservative for the demo deployment: one worker process, one prefetched task, and `max-tasks-per-child=1`. That means each research job gets a fresh child process. The tradeoff is a little extra process churn between jobs, but it reduces the chance that leaked MCP streams, stale async state, or provider memory growth carries into the next submitted research job. For this product shape, job isolation matters more than peak throughput.
+
 ## 3. What I Intentionally Left Out
 
 I cut anything that did not strengthen the core research loop:
@@ -431,6 +433,7 @@ The next technical focus would be formal evaluation and a more model-agnostic ag
 - Add RAG-backed product/category knowledge bases for faster common-product lookup before live search, while still using live sources for freshness and price evidence.
 - Run source searches concurrently with bounded parallelism where provider limits allow it, recognizing that parallelism helps but does not remove upstream scrape/search latency.
 - Restrict deep nesting of source results and follow-up lookups so the research step remains bounded even when a provider returns rich but slow result trees.
+- Tune worker lifecycle for larger production traffic: move from `max-tasks-per-child=1` to a measured `3-5`, add memory-per-child caps, autoscale worker pools, and preserve the pre-soft-limit async cancellation path.
 - Add a dedicated observability MCP server or trace service for long-running agent flows, with redacted node/tool spans, provider timings, circuit-breaker state, and ranking explanations.
 
 That would make future prompt/model/provider changes safer because they could be compared against stable expected outcomes instead of only ad hoc manual review.
