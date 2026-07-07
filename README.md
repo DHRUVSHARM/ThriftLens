@@ -221,7 +221,7 @@ Record a short video (~5 minutes) showing what you built. Demo the key flows —
 
 **Paste your video link (Loom, Google Drive, YouTube, etc.) into `video.md`.**
 
-**ThriftLens status:** Pending final link. Add the walkthrough URL to `video.md` before submission.
+**ThriftLens status:** Added the walkthrough URL to `video.md` before submission.
 
 #### 4. AI session history
 
