@@ -286,6 +286,85 @@ flowchart LR
 
 This was intentionally more modular than a single provider file. It makes the system easier to reason about, lets each capability evolve independently, and keeps source integrations behind a replaceable boundary.
 
+### Extraction Server
+
+The Extraction MCP server owns product perception and input safety. It is the first place where messy user evidence becomes structured product evidence, and it can stop the workflow before any source search happens.
+
+```mermaid
+flowchart TD
+  Input["Job evidence<br/>text, image, camera capture,<br/>or image plus focus note"] --> TextPath{"Text present?"}
+  TextPath -- yes --> TextSafety["screen_text_safety<br/>product intent, prompt injection,<br/>unsafe or regulated request"]
+  TextPath -- no --> ImagePath{"Image present?"}
+
+  TextSafety --> TextDecision{"Safe product description<br/>or image refinement?"}
+  TextDecision -- no --> TextStop["needs_refinement or failed<br/>no source search"]
+  TextDecision -- yes --> ImagePath
+
+  ImagePath -- yes --> ImageSafety["screen_image_safety<br/>NSFW/unsafe/unclear image gate"]
+  ImagePath -- no --> ExtractText["extract_product_reference<br/>from text"]
+
+  ImageSafety --> ImageDecision{"Safe clear image?"}
+  ImageDecision -- unsafe --> ImageStop["failed unsafe image"]
+  ImageDecision -- unclear --> ImageRefine["needs_refinement<br/>ask for clearer product/focus"]
+  ImageDecision -- safe --> ProductGate["image_product_gate<br/>product-likeness, ambiguity,<br/>multi-object handling"]
+
+  ProductGate --> GateDecision{"Product target clear?"}
+  GateDecision -- no --> TargetRefine["needs_refinement<br/>ask user to focus target"]
+  GateDecision -- yes --> ExtractImage["extract_product_reference<br/>image or image plus focus note"]
+
+  ExtractText --> Validate["schema validation + product category guard"]
+  ExtractImage --> Validate
+  Validate --> ValidDecision{"Valid consumer product?"}
+  ValidDecision -- no --> RefineOrFail["needs_refinement or regulated-product failure"]
+  ValidDecision -- yes --> Reference["ProductReference<br/>type, brand/model, color,<br/>features, assumptions, confidence"]
+  Validate -. invalid structured output .-> Repair["repair_product_reference"]
+  Repair --> Reference
+
+  TextSafety --> Gemini["Gemini"]
+  ImageSafety --> Gemini
+  ProductGate --> Gemini
+  ExtractText --> Gemini
+  ExtractImage --> Gemini
+  Repair --> Gemini
+```
+
+The graph remains in control of the stage transitions. The extraction tools make bounded model judgments and return structured contracts; the graph decides whether to fail, ask for refinement, or continue to discovery.
+
+### Discovery Server
+
+The Discovery MCP server owns product research before ranking. It turns the extracted reference into a shopper-aware search strategy, calls source tools, and filters results down to product-shaped candidates.
+
+```mermaid
+flowchart TD
+  Reference["ProductReference"] --> ProfileGate{"Discovery model available?"}
+  ProfileGate -- yes --> ModelProfile["classify_product_profile<br/>what kind of product,<br/>how shoppers compare it,<br/>priority attributes"]
+  ProfileGate -- no --> DeterministicProfile["deterministic profile fallback<br/>category, attributes, known terms"]
+
+  ModelProfile --> Context["build_search_context<br/>aliases, include terms,<br/>exclude terms, shopper signals"]
+  DeterministicProfile --> Context
+
+  Context --> PlanGate{"Planning model available?"}
+  PlanGate -- yes --> ModelPlan["plan_product_search<br/>choose allowed engines,<br/>queries, params, intent"]
+  PlanGate -- no --> DeterministicPlan["deterministic search plan<br/>closest + similar alternatives"]
+
+  ModelPlan --> ValidatePlan["validate_search_plan<br/>allowlisted engines,<br/>bounded calls, sanitized params"]
+  DeterministicPlan --> ValidatePlan
+  ValidatePlan --> Search["execute_search_plan<br/>SerpAPI MCP live source calls"]
+  Search --> RawResults["ProductSearchRawResult<br/>engine, intent, params, raw response"]
+  Search -. provider error .-> SourceError["safe source error<br/>partial result path"]
+
+  RawResults --> Normalize["normalize_products<br/>shopping/product fields only"]
+  Normalize --> ProductShape{"Product-shaped evidence?"}
+  ProductShape -- no --> Drop["drop generic links/articles"]
+  ProductShape -- yes --> SourceProducts["SourceProduct[]<br/>title, retailer, price,<br/>url, image, availability"]
+
+  ProfileGate --> Gemini["Gemini"]
+  PlanGate --> Gemini
+  Search --> SerpApi["SerpAPI hosted MCP"]
+```
+
+This server is where the live-source latency tradeoff shows up. The search plan is bounded and validated before execution, and normalization prevents generic web links from becoming product cards.
+
 ### Ranking Server
 
 The Ranking MCP server is hybrid rather than purely model-driven.
