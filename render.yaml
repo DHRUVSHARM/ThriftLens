@@ -9,6 +9,8 @@ envVarGroups:
         value: 3
       - key: DB_MAX_OVERFLOW
         value: 2
+      # Live provider keys are dashboard-managed secrets. Fill or rotate these
+      # in the Render environment group; never commit real values here.
       - key: GEMINI_API_KEY
         sync: false
       - key: GOOGLE_API_KEY

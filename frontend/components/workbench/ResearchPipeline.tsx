@@ -18,7 +18,7 @@ export function ResearchPipeline({ job }: { job: ResearchJob | null }) {
           return (
             <div
               key={stage.id}
-              className={`min-h-[108px] rounded-md border px-3 py-3 transition ${
+              className={`h-[136px] overflow-hidden rounded-md border px-3 py-3 transition ${
                 state === "active"
                   ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] ring-1 ring-[color-mix(in_srgb,var(--accent)_45%,transparent)]"
                   : "border-[var(--border)] bg-[var(--surface)]"

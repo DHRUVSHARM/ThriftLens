@@ -33,10 +33,10 @@ export function UnifiedInput(props: UnifiedInputProps) {
         <ImageSlot imageFile={props.imageFile} imagePreviewUrl={props.imagePreviewUrl} onImage={props.onImage} />
 
         <div className="grid gap-3">
-          <label className="grid gap-2">
+          <label className="grid gap-1.5">
             <FieldLabel>{hasImage ? "Focus note" : "Product evidence"}</FieldLabel>
             <textarea
-              className="min-h-32 resize-y rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
+              className="min-h-44 resize-y rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_14%,transparent)] md:min-h-48 lg:min-h-[206px]"
               maxLength={2000}
               placeholder={placeholder}
               suppressHydrationWarning

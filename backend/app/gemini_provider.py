@@ -240,8 +240,6 @@ class GeminiExtractionProvider:
             response_schema=response_schema,
         )
 
-    # TODO : check if this is the right approach the function is async but it seems the call to generate_content is syncronous
-    # also we want to have the driven by the agent loop not call to sdk directly
     async def _call_gemini_model(
         self,
         *,

@@ -115,6 +115,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("--concurrency=1", compose)
         self.assertIn("--prefetch-multiplier=1", compose)
         self.assertIn("--max-tasks-per-child=10", compose)
+        self.assertIn("SERPAPI_TIMEOUT_SECONDS: ${SERPAPI_TIMEOUT_SECONDS:-60}", compose)
 
     def test_render_blueprint_defines_deployment_services(self) -> None:
         blueprint = read("render.yaml")
@@ -140,6 +141,7 @@ class RuntimeInfrastructureStaticTests(TestCase):
         self.assertIn("mountPath: /data", blueprint)
         self.assertIn("NEXT_PUBLIC_API_BASE_URL", blueprint)
         self.assertIn("CORS_ALLOWED_ORIGINS", blueprint)
+        self.assertIn("- key: SERPAPI_API_KEY\n        sync: false", blueprint)
         self.assertIn("SERPAPI_TIMEOUT_SECONDS", blueprint)
         self.assertIn("healthCheckPath: /api/live", blueprint)
         self.assertNotIn("healthCheckPath: /api/health", blueprint)
