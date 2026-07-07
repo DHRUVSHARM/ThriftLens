@@ -504,7 +504,8 @@ These are all plausible next steps, but they would have diluted the take-home sl
 
 ## 4. What Breaks First Under Pressure
 
-- **Provider quota and latency:** Gemini and SerpAPI are the first operational bottlenecks. The app handles failures, but throughput still depends on provider limits and cost.
+- **Provider quota, latency, and availability:** Gemini and SerpAPI are the first operational bottlenecks. The app handles failures, but throughput still depends on provider limits, cost, and transient upstream outages such as `503 Service Unavailable`.
+- **Provider migration burden:** Moving to a more reliable model provider is feasible because the graph already talks to extraction, discovery, and ranking through capability boundaries. It is not a trivial config-only swap, though. The work would be moderate: add a provider adapter, map multimodal inputs and structured-output behavior to the new SDK, retune prompts/schemas for image safety, extraction, discovery planning, and ranking, then rerun the blocked-input, messy-image, and ranking test matrix. The API, job lifecycle, MCP service shape, frontend, storage, and polling model should mostly stay unchanged.
 - **Live search quality:** Search results depend on upstream shopping/search coverage. Obscure products or vague descriptions may produce weak alternatives.
 - **Ambiguous evidence:** Crowded images still need user refinement.
 - **Ranking confidence:** Exact-match detection is conservative by design; users may see “best available match” more often than a shopping app would.

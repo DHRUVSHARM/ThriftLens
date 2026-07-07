@@ -44,7 +44,7 @@ envVarGroups:
       - key: PROVIDER_TIMEOUT_SECONDS
         value: 20
       - key: PROVIDER_MAX_RETRIES
-        value: 0
+        value: 1
       - key: PROVIDER_BACKOFF_BASE_SECONDS
         value: 2
       - key: PROVIDER_BACKOFF_MAX_SECONDS
