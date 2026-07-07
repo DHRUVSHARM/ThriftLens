@@ -180,7 +180,7 @@ services:
     name: thriftlens-worker
     runtime: docker
     region: oregon
-    plan: starter
+    plan: pro
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     dockerCommand: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=1
