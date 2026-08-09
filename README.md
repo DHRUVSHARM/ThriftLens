@@ -9,6 +9,15 @@ AI is central to the product rather than added as a chat sidebar. The app uses a
 The repeat value comes from exploration and discovery. Each input can reveal products the user would not have known how to search for directly: similar alternatives, cheaper options, premium versions, adjacent styles, and caveats about why something is or is not a strong match. ThriftLens is not just answering one fixed shopping query; it gives users a way to turn visual curiosity into product research they can inspect, refine, compare, and use to discover newer products they might not have considered.
 
 
+#### Quick Access 
+- Live web app: https://thriftlens-web.onrender.com/
+- API health check: https://thriftlens-api.onrender.com/api/health
+# PART 1 has the UI walkthrough, and some flows 
+https://www.loom.com/share/361ba0eb07314c13be41b8ecc2130da8
+# PART 2 (optional has a couple of cases)
+detailed tradeoffs and state graphs referenced are documented in APPROACH.md
+https://www.loom.com/share/27a5b8d6203b4b7e9be2347288a1385b
+
 2) Deliverables as mentioned in the README
 
 #### 1. Working software
