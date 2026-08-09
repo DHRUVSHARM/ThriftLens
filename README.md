@@ -73,11 +73,7 @@ A `.env.example` is included with stub keys for providers we have accounts with 
 
 #### 3. Video walkthrough
 
-Record a short video (~5 minutes) showing what you built. Demo the key flows — whether that's a UI walkthrough, a CLI session, or hitting your API — explain your decisions, and highlight anything you're particularly proud of. This is your chance to show us the experience through your eyes.
-
-**Paste your video link (Loom, Google Drive, YouTube, etc.) into `video.md`.**
-
-**ThriftLens status:** Added the walkthrough URL to `video.md` before submission.
+**ThriftLens status:** Added the walkthrough URL to `video.md`
 
 #### 4. AI session history
 
