@@ -12,11 +12,9 @@ The repeat value comes from exploration and discovery. Each input can reveal pro
 #### Quick Access 
 - Live web app: https://thriftlens-web.onrender.com/
 - API health check: https://thriftlens-api.onrender.com/api/health
-# PART 1 has the UI walkthrough, and some flows 
-https://www.loom.com/share/361ba0eb07314c13be41b8ecc2130da8
-# PART 2 (optional has a couple of cases)
-detailed tradeoffs and state graphs referenced are documented in APPROACH.md
-https://www.loom.com/share/27a5b8d6203b4b7e9be2347288a1385b
+- detailed tradeoffs and state graphs referenced are documented in APPROACH.md 
+- PART 1 has the UI walkthrough, and some flows : https://www.loom.com/share/361ba0eb07314c13be41b8ecc2130da8
+- PART 2 (optional has a couple of cases) : https://www.loom.com/share/27a5b8d6203b4b7e9be2347288a1385b
 
 2) Deliverables as mentioned in the README
 
