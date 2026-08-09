@@ -48,8 +48,6 @@ Then open:
 
 For a no-key smoke demo, set `PROVIDER_MODE=SAMPLE_MODE`, but the intended review path is `REAL_MODE` with `GEMINI_API_KEY` and `SERPAPI_API_KEY`.
 
-**If your project is deployable, deploy it.** We want to experience what you built, not just read about it. A live URL — whether it's a web app, an API endpoint, or a hosted service — goes a long way. Vercel, Railway, Fly, a VPS, whatever works. Include the URL in your APPROACH.md.
-
 **ThriftLens deployment status:** Deployed on Render.
 
 - Live web app: https://thriftlens-web.onrender.com/
@@ -73,16 +71,8 @@ A `.env.example` is included with stub keys for providers we have accounts with 
 
 #### 3. Video walkthrough
 
-Record a short video (~5 minutes) showing what you built. Demo the key flows — whether that's a UI walkthrough, a CLI session, or hitting your API — explain your decisions, and highlight anything you're particularly proud of. This is your chance to show us the experience through your eyes.
-
-**Paste your video link (Loom, Google Drive, YouTube, etc.) into `video.md`.**
-
 **ThriftLens status:** Added the walkthrough URL to `video.md` before submission.
 
 #### 4. AI session history
-
-Your AI session logs (Claude Code, Codex, Cursor) are packaged automatically when you run `./submit.sh`. If you used other AI tools (ChatGPT, etc.), export those conversations and include them in your repo before submitting.
-
-This is a required deliverable. We review your AI interaction to understand how you work — how you plan, iterate, and direct the tools.
 
 **ThriftLens status:** Covered by `./submit.sh`, which packages the AI session history during final submission. For a reviewer-friendly summary of how the AI workflow was directed, see the development workflow overview in `APPROACH.md`; the raw session history provides the detailed iteration trail.
