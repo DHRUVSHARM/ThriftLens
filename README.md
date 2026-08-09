@@ -10,7 +10,7 @@ The repeat value comes from exploration and discovery. Each input can reveal pro
 
 
 #### Quick Access 
-- Live web app: https://thriftlens-web.onrender.com/
+- Live web app: https://thriftlens-web.onrender.com/  - (Might take some time to load up due to my recent downgrade to Render's Free Tier)
 - API health check: https://thriftlens-api.onrender.com/api/health
 - detailed tradeoffs and state graphs referenced are documented in APPROACH.md 
 - PART 1 has the UI walkthrough, and some flows : https://www.loom.com/share/361ba0eb07314c13be41b8ecc2130da8
