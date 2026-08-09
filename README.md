@@ -1,10 +1,10 @@
-# ThriftLens Product README - This README contains the answers to questions, deliverables links or folder paths, and other documentation location
+ThriftLens Product README - This README contains the answers to questions, deliverables links or folder paths, and other documentation location
 
-# **ThriftLens concept summary:** ThriftLens is a source-backed product research app for moments when a user has product evidence but not a clean product name. The user can upload an image, take a camera photo, describe a product in text, or combine image + text to focus the system on one item. ThriftLens then turns that messy evidence into a structured product reference, searches live product sources, ranks candidate matches, and explains the result with source links, caveats, and price context.
+**ThriftLens concept summary:** ThriftLens is a source-backed product research app for moments when a user has product evidence but not a clean product name. The user can upload an image, take a camera photo, describe a product in text, or combine image + text to focus the system on one item. ThriftLens then turns that messy evidence into a structured product reference, searches live product sources, ranks candidate matches, and explains the result with source links, caveats, and price context.
 
 AI is central to the product rather than added as a chat sidebar. The app uses a graph-based workflow to perceive the input, decide whether it is safe and product-focused, extract the product reference, plan source searches, call MCP tools, normalize product results, and rank matches. The graph keeps the top-level flow controlled and reviewable, while model-driven steps handle ambiguous product understanding, search planning, and match explanation where fixed rules would be too brittle.
 
-# **Why this is worth opening twice:** The product is designed around a recurring, real behavior: people see products in screenshots, marketplace posts, rooms, outfits, shared photos, and store shelves, but often do not know the exact name or where to compare similar options. ThriftLens makes that moment actionable. A user can drop in a shared image, take a quick photo, or add a short focus note like “the lamp on the left” or “the red shirt,” then get source-backed matches and alternatives.
+**Why this is worth opening twice:** The product is designed around a recurring, real behavior: people see products in screenshots, marketplace posts, rooms, outfits, shared photos, and store shelves, but often do not know the exact name or where to compare similar options. ThriftLens makes that moment actionable. A user can drop in a shared image, take a quick photo, or add a short focus note like “the lamp on the left” or “the red shirt,” then get source-backed matches and alternatives.
 
 The repeat value comes from exploration and discovery. Each input can reveal products the user would not have known how to search for directly: similar alternatives, cheaper options, premium versions, adjacent styles, and caveats about why something is or is not a strong match. ThriftLens is not just answering one fixed shopping query; it gives users a way to turn visual curiosity into product research they can inspect, refine, compare, and use to discover newer products they might not have considered.
 
@@ -78,13 +78,13 @@ A `.env.example` is included with stub keys for providers we have accounts with 
 
 #### 3. Video walkthrough
 
-# Video Walkthrough
+Video Walkthrough
 
-## PART 1 has the UI walkthrough, and some flows 
+# PART 1 has the UI walkthrough, and some flows 
 
 https://www.loom.com/share/361ba0eb07314c13be41b8ecc2130da8
 
-## PART 2 (optional has a couple of cases)
+# PART 2 (optional has a couple of cases)
 # detailed tradeoffs and state graphs referenced are documented in APPROACH.md
 
 https://www.loom.com/share/27a5b8d6203b4b7e9be2347288a1385b
